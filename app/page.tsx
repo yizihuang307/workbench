@@ -196,19 +196,6 @@ export default function Home() {
     });
   }
 
-  function nudgeTask(group: Group, taskId: string, delta: -1 | 1) {
-    updateTasks((tasks) => {
-      const list = [...tasks[group]];
-      const index = list.findIndex((task) => task.id === taskId);
-      const movableIndices = store.hideDone ? list.map((task, taskIndex) => !task.done ? taskIndex : -1).filter((taskIndex) => taskIndex >= 0) : list.map((_, taskIndex) => taskIndex);
-      const visibleIndex = movableIndices.indexOf(index);
-      const nextIndex = movableIndices[visibleIndex + delta] ?? -1;
-      if (index < 0 || nextIndex < 0 || nextIndex >= list.length) return tasks;
-      [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
-      return { ...tasks, [group]: list };
-    });
-  }
-
   function deleteTask(group: Group, taskId: string) {
     const index = store.tasks[group].findIndex((task) => task.id === taskId);
     if (index < 0) return;
@@ -238,9 +225,7 @@ export default function Home() {
 
   const today = new Date();
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
-  const incomplete = store.tasks.today.filter((task) => !task.done).length;
-
-  const actions = { addTask, toggleTask, togglePriority, editTask, moveTask, nudgeTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
+  const actions = { addTask, toggleTask, togglePriority, editTask, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
 
   return <main className="workbench" aria-busy={!ready}>
     <aside className="sidebar">
@@ -255,11 +240,14 @@ export default function Home() {
     </aside>
 
     <section className="content">
-      <header className="topbar"><span>{dateLabel}</span><button className="quick-button" onClick={() => setQuickOpen(true)}>＋ 快速记录</button><b aria-label="用户头像">菠</b></header>
       <div className="page">
         <header className="hero">
-          <div><p>TODAY / {String(today.getDate()).padStart(2, "0")}</p><h1>今天，先完成<br />真正重要的事。</h1><span>还有 {incomplete} 项安排等待处理</span></div>
-          <div className="mood-block"><small>此刻感觉怎么样？</small><Mood value={store.mood} onChange={(mood) => setStore((current) => ({ ...current, mood }))} /></div>
+          <div className="hero-intro"><p>{dateLabel}</p><h1>今天，先完成真正重要的事。</h1></div>
+          <div className="hero-tools">
+            <div className="mood-block"><small>此刻感觉怎么样？</small><Mood value={store.mood} onChange={(mood) => setStore((current) => ({ ...current, mood }))} /></div>
+            <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
+            <b className="avatar" aria-label="用户头像">菠</b>
+          </div>
         </header>
 
         <div className="board">
@@ -290,7 +278,6 @@ type AreaActions = {
   togglePriority: (id: string) => void;
   editTask: (group: Group, id: string, label: string) => boolean;
   moveTask: (from: Group, id: string, to: Group, beforeId?: string) => void;
-  nudgeTask: (group: Group, id: string, delta: -1 | 1) => void;
   deleteTask: (group: Group, id: string) => void;
   dragged: { group: Group; id: string } | null;
   setDragged: (value: { group: Group; id: string } | null) => void;
@@ -310,7 +297,7 @@ function TaskArea({ group, tasks, onExpand, expandRef, featured = false, expande
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
     <div className="task-list" aria-label={GROUP_NAME[group]}>
-      {shown.map((task, index) => <TaskRow key={task.id} task={task} group={group} index={index} total={shown.length} {...actions} />)}
+      {shown.map((task) => <TaskRow key={task.id} task={task} group={group} {...actions} />)}
       {!shown.length && <div className="empty"><b>✓</b><span>{actions.hideDone && tasks.length ? "完成项已隐藏" : "这里还没有安排"}</span></div>}
     </div>
     {featured && <footer className="progress"><span>{complete} / {tasks.length} 已完成</span><i><b style={{ width: `${tasks.length ? complete / tasks.length * 100 : 0}%` }} /></i><label><input type="checkbox" checked={actions.hideDone} onChange={(event) => actions.setHideDone(event.target.checked)} /> 隐藏已完成</label></footer>}
@@ -325,12 +312,28 @@ function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, value
     onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) submit(); }} /><small>{value.length ? `${value.length}/200` : "↵"}</small></div>;
 }
 
-function TaskRow({ task, group, index, total, ...actions }: AreaActions & { task: Task; group: Group; index: number; total: number }) {
+function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group: Group }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.label);
   const [menuOpen, setMenuOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    function close(event: PointerEvent) {
+      if (!menu.current?.contains(event.target as Node)) setMenuOpen(false);
+    }
+    function closeWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, [menuOpen]);
   function save() { if (actions.editTask(group, task.id, draft)) setEditing(false); else setDraft(task.label); }
   return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing}
     onDragStart={() => actions.setDragged({ group, id: task.id })} onDragEnd={() => actions.setDragged(null)}
@@ -338,24 +341,21 @@ function TaskRow({ task, group, index, total, ...actions }: AreaActions & { task
     <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
     <div className="task-copy">
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
-        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <span onDoubleClick={() => setEditing(true)}>{task.label}</span>}
-      <div>{task.legacy && <em>昨日遗留</em>}{task.priority && <em className="priority-tag">最优先</em>}</div>
+        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">最优先</em>}{task.legacy && <em>昨日遗留</em>}</div>}
     </div>
-    {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消最优先" : "标记为最优先"} aria-pressed={task.priority}>!</button>}
-    <div className="menu-wrap"><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>•••</button>
+    {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消最优先" : "标记为最优先"} aria-pressed={task.priority}><span aria-hidden /></button>}
+    <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>•••</button>
       {menuOpen && <div className="task-menu" role="menu">
         <button onClick={() => { setEditing(true); setMenuOpen(false); }}>编辑</button>
-        <button disabled={index === 0} onClick={() => { actions.nudgeTask(group, task.id, -1); setMenuOpen(false); }}>上移</button>
-        <button disabled={index === total - 1} onClick={() => { actions.nudgeTask(group, task.id, 1); setMenuOpen(false); }}>下移</button>
         {GROUPS.filter((target) => target !== group).map((target) => <button key={target} onClick={() => { actions.moveTask(group, task.id, target); setMenuOpen(false); }}>移到{GROUP_NAME[target].replace("安排", "")}</button>)}
-        <button className="danger" onClick={() => actions.deleteTask(group, task.id)}>删除</button>
+        <button className="danger" onClick={() => { actions.deleteTask(group, task.id); setMenuOpen(false); }}>删除</button>
       </div>}
     </div><span className="grip" aria-hidden>⠿</span>
   </article>;
 }
 
 function Mood({ value, onChange }: { value: number; onChange: (value: number) => void }) {
-  return <div id="mood" className="moods" tabIndex={-1}>{["很累", "一般", "平静", "不错", "很好"].map((label, index) => <button key={label} className={value === index ? "active" : ""} onClick={() => onChange(index)} aria-label={`心情：${label}`} aria-pressed={value === index}><span>{["☹", "◔", "•‿•", "◡̈", "✦"][index]}</span></button>)}</div>;
+  return <div id="mood" className="moods" tabIndex={-1}>{["很累", "一般", "平静", "不错", "很好"].map((label, index) => <button key={label} className={`mood-${index} ${value === index ? "active" : ""}`} onClick={() => onChange(index)} aria-label={`心情：${label}`} aria-pressed={value === index}><span className="mood-face" aria-hidden><i /><b /></span></button>)}</div>;
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
