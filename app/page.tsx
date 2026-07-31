@@ -2,21 +2,17 @@
 
 import { useMemo, useState } from "react";
 
-type Task = {
-  id: number;
-  label: string;
-  note?: string;
-  done?: boolean;
-  legacy?: boolean;
-};
+type Task = { id: number; label: string; note?: string; done?: boolean; legacy?: boolean };
+type Group = "today" | "week" | "later";
 
-const themes = [
-  { id: "warm", number: "01", name: "温和极简", detail: "安静、耐看" },
-  { id: "journal", number: "02", name: "暖调手账", detail: "松弛、有温度" },
-  { id: "calm", number: "03", name: "精密温和", detail: "清晰、易落地" },
+const directions = [
+  { id: "minimal", no: "01", name: "温和极简", note: "排版与留白" },
+  { id: "journal", no: "02", name: "Bento 手账", note: "拼贴与个人感" },
+  { id: "precision", no: "03", name: "精密工具", note: "密度与效率" },
+  { id: "blend", no: "04", name: "推荐组合", note: "轻盈且易落地" },
 ] as const;
 
-const seedTasks: Record<string, Task[]> = {
+const initialTasks: Record<Group, Task[]> = {
   today: [
     { id: 1, label: "整理周会要点", note: "10:00", done: true },
     { id: 2, label: "确认新版工作台的信息架构", legacy: true },
@@ -33,239 +29,223 @@ const seedTasks: Record<string, Task[]> = {
   ],
 };
 
-function TinyIcon({ children }: { children: React.ReactNode }) {
-  return <span className="tiny-icon" aria-hidden="true">{children}</span>;
-}
-
 export default function Home() {
-  const [theme, setTheme] = useState<(typeof themes)[number]["id"]>("warm");
-  const [tasks, setTasks] = useState(seedTasks);
+  const [direction, setDirection] = useState<(typeof directions)[number]["id"]>("minimal");
+  const [tasks, setTasks] = useState(initialTasks);
   const [draft, setDraft] = useState("");
   const [hideDone, setHideDone] = useState(false);
   const [mood, setMood] = useState(3);
 
-  const currentTheme = themes.find((item) => item.id === theme)!;
-  const todayTasks = useMemo(
-    () => hideDone ? tasks.today.filter((task) => !task.done) : tasks.today,
-    [hideDone, tasks],
+  const visibleToday = useMemo(
+    () => (hideDone ? tasks.today.filter((task) => !task.done) : tasks.today),
+    [hideDone, tasks.today],
   );
 
-  function toggleTask(group: string, id: number) {
+  function toggle(group: Group, id: number) {
     setTasks((current) => ({
       ...current,
-      [group]: current[group].map((task) =>
-        task.id === id ? { ...task, done: !task.done } : task,
-      ),
+      [group]: current[group].map((task) => task.id === id ? { ...task, done: !task.done } : task),
     }));
   }
 
   function addTask() {
     const label = draft.trim();
     if (!label) return;
-    setTasks((current) => ({
-      ...current,
-      today: [...current.today, { id: Date.now(), label }],
-    }));
+    setTasks((current) => ({ ...current, today: [...current.today, { id: Date.now(), label }] }));
     setDraft("");
   }
 
+  const shared = { tasks, visibleToday, draft, setDraft, addTask, toggle, hideDone, setHideDone, mood, setMood };
+
   return (
-    <main className="app-shell" data-theme={theme}>
-      <aside className="sidebar">
-        <div className="brand-row">
-          <div className="brand-mark">我</div>
-          <div>
-            <p className="brand-title">我的工作台</p>
-            <p className="brand-subtitle">今天也慢慢来</p>
-          </div>
-          <button className="icon-button edit-button" aria-label="编辑工作台名称">⌁</button>
-        </div>
-
-        <nav className="nav-list" aria-label="主要导航">
-          <button className="nav-item active"><TinyIcon>⌁</TinyIcon><span>安排</span></button>
-          <button className="nav-item"><TinyIcon>▤</TinyIcon><span>记录</span></button>
-          <button className="nav-item"><TinyIcon>◇</TinyIcon><span>信息</span></button>
-          <button className="nav-item"><TinyIcon>☺</TinyIcon><span>心情</span></button>
-        </nav>
-
-        <div className="sidebar-spacer" />
-        <section className="style-switcher" aria-label="视觉方向">
-          <p className="switcher-label">视觉方向</p>
-          {themes.map((item) => (
-            <button
-              key={item.id}
-              className={`style-option ${theme === item.id ? "selected" : ""}`}
-              onClick={() => setTheme(item.id)}
-            >
-              <span className="style-number">{item.number}</span>
-              <span>
-                <strong>{item.name}</strong>
-                <small>{item.detail}</small>
-              </span>
-              <span className="style-dot" />
-            </button>
-          ))}
-        </section>
-        <button className="settings"><TinyIcon>⚙</TinyIcon><span>设置</span></button>
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div className="mobile-brand">我的工作台</div>
-          <div className="theme-caption">
-            <span>{currentTheme.number}</span>
-            {currentTheme.name}
-          </div>
-          <div className="top-actions">
-            <button className="quick-note"><span>＋</span> 快速记录</button>
-            <button className="avatar" aria-label="个人账户">菠</button>
-          </div>
-        </header>
-
-        <div className="content-wrap">
-          <div className="greeting">
-            <div>
-              <p className="eyebrow">7月31日 · 星期五</p>
-              <h1>早上好，菠菜 <span className="wave">〰</span></h1>
-              <p className="greeting-copy">今天有 <strong>{tasks.today.filter((item) => !item.done).length} 件</strong>安排，先从最重要的一件开始。</p>
-            </div>
-            <div className="mood-quick">
-              <span>此刻感觉怎么样？</span>
-              <div className="mood-row">
-                {["☹", "◔", "•‿•", "◡̈", "✦"].map((face, index) => (
-                  <button
-                    key={face}
-                    className={mood === index ? "chosen" : ""}
-                    onClick={() => setMood(index)}
-                    aria-label={`心情等级 ${index + 1}`}
-                  >
-                    {face}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard-grid">
-            <section className="today-card">
-              <div className="section-head">
-                <div>
-                  <div className="title-line">
-                    <span className="accent-dot" />
-                    <h2>今日安排</h2>
-                    <span className="count">{tasks.today.length}</span>
-                  </div>
-                  <p>把注意力留给今天</p>
-                </div>
-                <label className="hide-toggle">
-                  <input type="checkbox" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />
-                  隐藏已完成
-                </label>
-              </div>
-
-              <div className="add-row">
-                <button onClick={addTask} aria-label="添加任务">＋</button>
-                <input
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => event.key === "Enter" && addTask()}
-                  placeholder="添加一项今天要做的事…"
-                />
-                <span>↵</span>
-              </div>
-
-              <div className="task-list">
-                {todayTasks.map((task) => (
-                  <label className={`task-row ${task.done ? "completed" : ""}`} key={task.id}>
-                    <input type="checkbox" checked={Boolean(task.done)} onChange={() => toggleTask("today", task.id)} />
-                    <span className="checkbox-ui">✓</span>
-                    <span className="task-copy">
-                      <span className="task-label">{task.label}</span>
-                      {task.legacy && <span className="legacy-tag">昨日遗留</span>}
-                    </span>
-                    {task.note && <span className="task-note">{task.note}</span>}
-                    <button className="drag-handle" aria-label="拖动任务" onClick={(event) => event.preventDefault()}>⠿</button>
-                  </label>
-                ))}
-              </div>
-
-              <footer className="today-footer">
-                <span>{tasks.today.filter((item) => item.done).length} / {tasks.today.length} 已完成</span>
-                <div className="progress-track"><span style={{ width: `${(tasks.today.filter((item) => item.done).length / tasks.today.length) * 100}%` }} /></div>
-              </footer>
-            </section>
-
-            <div className="side-stack">
-              <TaskMiniCard
-                title="本周安排"
-                subtitle="接下来几天"
-                tasks={tasks.week}
-                onToggle={(id) => toggleTask("week", id)}
-                tone="week"
-              />
-              <TaskMiniCard
-                title="后续安排"
-                subtitle="不着急，先放在这里"
-                tasks={tasks.later}
-                onToggle={(id) => toggleTask("later", id)}
-                tone="later"
-              />
-              <section className="note-card">
-                <div>
-                  <span className="note-icon">✎</span>
-                  <div><h3>记录一闪而过的想法</h3><p>随手记 · 会议纪要</p></div>
-                </div>
-                <button>去记录 <span>→</span></button>
-              </section>
-            </div>
-          </div>
-        </div>
-
-        <div className="mobile-themes">
-          {themes.map((item) => (
-            <button key={item.id} className={theme === item.id ? "selected" : ""} onClick={() => setTheme(item.id)}>
-              {item.number} {item.name}
-            </button>
-          ))}
-        </div>
-      </section>
+    <main className={`site direction-${direction}`}>
+      <DirectionRail direction={direction} setDirection={setDirection} />
+      {direction === "minimal" && <MinimalView {...shared} />}
+      {direction === "journal" && <JournalView {...shared} />}
+      {direction === "precision" && <PrecisionView {...shared} />}
+      {direction === "blend" && <BlendView {...shared} />}
+      <MobileDirectionBar direction={direction} setDirection={setDirection} />
     </main>
   );
 }
 
-function TaskMiniCard({
-  title,
-  subtitle,
-  tasks,
-  onToggle,
-  tone,
-}: {
-  title: string;
-  subtitle: string;
-  tasks: Task[];
-  onToggle: (id: number) => void;
-  tone: "week" | "later";
+type SharedProps = {
+  tasks: Record<Group, Task[]>;
+  visibleToday: Task[];
+  draft: string;
+  setDraft: (value: string) => void;
+  addTask: () => void;
+  toggle: (group: Group, id: number) => void;
+  hideDone: boolean;
+  setHideDone: (value: boolean) => void;
+  mood: number;
+  setMood: (value: number) => void;
+};
+
+function DirectionRail({ direction, setDirection }: {
+  direction: string;
+  setDirection: (value: (typeof directions)[number]["id"]) => void;
 }) {
   return (
-    <section className={`mini-card ${tone}`}>
-      <div className="mini-head">
-        <div>
-          <h2>{title} <span>{tasks.length}</span></h2>
-          <p>{subtitle}</p>
-        </div>
-        <button aria-label={`添加${title}`}>＋</button>
-      </div>
-      <div className="mini-tasks">
-        {tasks.map((task) => (
-          <label className={task.done ? "completed" : ""} key={task.id}>
-            <input type="checkbox" checked={Boolean(task.done)} onChange={() => onToggle(task.id)} />
-            <span className="mini-check">✓</span>
-            <span>{task.label}</span>
-            {task.note && <small>{task.note}</small>}
-          </label>
-        ))}
-      </div>
-      <button className="view-all">查看全部 <span>→</span></button>
-    </section>
+    <aside className="direction-rail">
+      <p className="rail-kicker">视觉方向</p>
+      {directions.map((item) => (
+        <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}>
+          <span>{item.no}</span>
+          <strong>{item.name}</strong>
+          <small>{item.note}</small>
+        </button>
+      ))}
+      <p className="rail-tip">内容相同<br />只比较设计</p>
+    </aside>
   );
+}
+
+function MobileDirectionBar({ direction, setDirection }: {
+  direction: string;
+  setDirection: (value: (typeof directions)[number]["id"]) => void;
+}) {
+  return <div className="mobile-directions">{directions.map((item) => (
+    <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}>
+      <b>{item.no}</b>{item.name}
+    </button>
+  ))}</div>;
+}
+
+function Mood({ value, onChange, compact = false }: { value: number; onChange: (v: number) => void; compact?: boolean }) {
+  return <div className={`moods ${compact ? "compact" : ""}`}>
+    {["☹", "◔", "•‿•", "◡̈", "✦"].map((face, index) => (
+      <button key={face} className={value === index ? "active" : ""} onClick={() => onChange(index)} aria-label={`心情 ${index + 1}`}>{face}</button>
+    ))}
+  </div>;
+}
+
+function CheckTask({ task, onToggle, dense = false }: { task: Task; onToggle: () => void; dense?: boolean }) {
+  return (
+    <label className={`check-task ${task.done ? "done" : ""} ${dense ? "dense" : ""}`}>
+      <input type="checkbox" checked={Boolean(task.done)} onChange={onToggle} />
+      <span className="check-box">✓</span>
+      <span className="check-label">{task.label}</span>
+      {task.legacy && <em>昨日遗留</em>}
+      {task.note && <small>{task.note}</small>}
+      <span className="grip">⠿</span>
+    </label>
+  );
+}
+
+function AddTask({ draft, setDraft, addTask, placeholder = "添加今天要做的事" }: Pick<SharedProps, "draft" | "setDraft" | "addTask"> & { placeholder?: string }) {
+  return <div className="add-task">
+    <button onClick={addTask} aria-label="添加任务">＋</button>
+    <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder={placeholder} />
+    <kbd>↵</kbd>
+  </div>;
+}
+
+function MinimalView(p: SharedProps) {
+  return <section className="minimal-view">
+    <header className="minimal-top">
+      <span className="wordmark">我的工作台</span>
+      <nav><b>安排</b><span>记录</span><span>信息</span><span>心情</span></nav>
+      <button className="text-button">＋ 快速记录</button>
+    </header>
+    <div className="minimal-body">
+      <div className="minimal-heading">
+        <p>7月31日 · 星期五</p>
+        <h1>今天，先做好眼前的事。</h1>
+        <span>还有 {p.tasks.today.filter((t) => !t.done).length} 项安排</span>
+      </div>
+      <div className="minimal-columns">
+        <section className="minimal-main">
+          <div className="plain-title"><h2>今日安排</h2><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label></div>
+          <AddTask {...p} />
+          <div className="plain-list">{p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} />)}</div>
+        </section>
+        <aside className="minimal-side">
+          <PlainGroup title="本周安排" tasks={p.tasks.week} group="week" toggle={p.toggle} />
+          <PlainGroup title="后续安排" tasks={p.tasks.later} group="later" toggle={p.toggle} />
+          <div className="minimal-mood"><span>此刻感觉</span><Mood value={p.mood} onChange={p.setMood} compact /></div>
+        </aside>
+      </div>
+    </div>
+  </section>;
+}
+
+function PlainGroup({ title, tasks, group, toggle }: { title: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"] }) {
+  return <section className="plain-group"><div><h3>{title}</h3><button>＋</button></div>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}</section>;
+}
+
+function JournalView(p: SharedProps) {
+  return <section className="journal-view">
+    <header className="journal-top"><div><i>我的</i><strong>工作台</strong></div><nav><b>安排</b><span>记录</span><span>信息</span><span>心情</span></nav><button>快速记录 ↗</button></header>
+    <div className="journal-board">
+      <div className="journal-greeting"><span>FRI · 07/31</span><h1>早上好，菠菜！</h1><p>今日份清单已经摆好啦。</p></div>
+      <section className="paper today-paper">
+        <div className="tape" /><div className="paper-title"><span>01</span><h2>今日安排</h2><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 收起完成项</label></div>
+        <AddTask {...p} placeholder="写下一件要做的小事…" />
+        {p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} />)}
+      </section>
+      <section className="paper week-paper"><div className="pin" /><div className="paper-title"><span>02</span><h2>本周安排</h2></div>{p.tasks.week.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => p.toggle("week", task.id)} />)}</section>
+      <section className="paper later-paper"><div className="paper-title"><span>03</span><h2>后续安排</h2></div>{p.tasks.later.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => p.toggle("later", task.id)} />)}</section>
+      <section className="mood-note"><strong>今天的心情天气</strong><Mood value={p.mood} onChange={p.setMood} /><small>点一个最像此刻的表情</small></section>
+      <button className="record-note"><b>✎</b><span>记下一闪而过的想法<small>随手记 · 会议纪要</small></span><i>→</i></button>
+    </div>
+  </section>;
+}
+
+function PrecisionView(p: SharedProps) {
+  return <section className="precision-view">
+    <aside className="tool-sidebar">
+      <div className="tool-brand"><span>W</span><strong>我的工作台</strong></div>
+      <nav><button className="active">⌁ <span>安排</span><kbd>⌘1</kbd></button><button>▤ <span>记录</span><kbd>⌘2</kbd></button><button>◇ <span>信息</span></button><button>☺ <span>心情</span></button></nav>
+      <div className="tool-bottom">⚙ 设置</div>
+    </aside>
+    <div className="tool-content">
+      <header className="tool-top"><div className="crumb">我的工作台 <span>/</span> 安排</div><button>＋ 新建任务</button><button>快速记录</button><b>菠</b></header>
+      <div className="tool-page">
+        <div className="tool-heading"><div><h1>安排</h1><p>2026年7月31日，星期五</p></div><Mood value={p.mood} onChange={p.setMood} compact /></div>
+        <div className="metric-row"><div><span>今日未完成</span><b>{p.tasks.today.filter((t) => !t.done).length}</b></div><div><span>本周待安排</span><b>{p.tasks.week.length}</b></div><div><span>后续事项</span><b>{p.tasks.later.length}</b></div></div>
+        <section className="tool-panel">
+          <div className="tool-panel-head"><h2>今日安排 <span>{p.tasks.today.length}</span></h2><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label><button>•••</button></div>
+          <AddTask {...p} placeholder="快速添加任务，按 Enter 保存" />
+          <div className="table-head"><span>任务</span><span>时间</span><span>状态</span><span /></div>
+          {p.visibleToday.map((task) => <div className="table-row" key={task.id}><CheckTask task={task} onToggle={() => p.toggle("today", task.id)} /><span>{task.note || "—"}</span><span className={task.done ? "status done-status" : "status"}>{task.done ? "已完成" : "待办"}</span><button>•••</button></div>)}
+        </section>
+        <div className="tool-groups"><ToolGroup title="本周安排" tasks={p.tasks.week} group="week" toggle={p.toggle} /><ToolGroup title="后续安排" tasks={p.tasks.later} group="later" toggle={p.toggle} /></div>
+      </div>
+    </div>
+  </section>;
+}
+
+function ToolGroup({ title, tasks, group, toggle }: { title: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"] }) {
+  return <section className="tool-small"><header><h3>{title} <span>{tasks.length}</span></h3><button>＋</button></header>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}</section>;
+}
+
+function BlendView(p: SharedProps) {
+  return <section className="blend-view">
+    <aside className="blend-side">
+      <div className="blend-brand"><span>我</span><div><strong>我的工作台</strong><small>今天也慢慢来</small></div></div>
+      <nav><button className="active">⌁ <span>安排</span></button><button>▤ <span>记录</span></button><button>◇ <span>信息</span></button><button>☺ <span>心情</span></button></nav>
+      <div className="blend-record"><b>一闪而过的想法？</b><span>随手记 · 会议纪要</span><button>＋ 快速记录</button></div>
+      <div className="blend-settings">⚙ 设置</div>
+    </aside>
+    <div className="blend-content">
+      <header className="blend-top"><span>7月31日 · 星期五</span><button>＋ 快速记录</button><b>菠</b></header>
+      <div className="blend-page">
+        <div className="blend-heading"><div><p>早上好，菠菜</p><h1>今天想先完成哪一件？</h1><span>还有 {p.tasks.today.filter((t) => !t.done).length} 项安排，不用着急。</span></div><div><small>此刻感觉怎么样？</small><Mood value={p.mood} onChange={p.setMood} compact /></div></div>
+        <div className="blend-grid">
+          <section className="blend-today">
+            <div className="blend-title"><div><i /><h2>今日安排</h2><span>{p.tasks.today.length}</span></div><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label></div>
+            <AddTask {...p} />
+            {p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} />)}
+            <footer><span>{p.tasks.today.filter((t) => t.done).length} / {p.tasks.today.length} 已完成</span><i><b style={{ width: `${p.tasks.today.filter((t) => t.done).length / p.tasks.today.length * 100}%` }} /></i></footer>
+          </section>
+          <aside className="blend-stack"><BlendGroup title="本周安排" subtitle="接下来几天" tasks={p.tasks.week} group="week" toggle={p.toggle} tone="yellow" /><BlendGroup title="后续安排" subtitle="未来再处理" tasks={p.tasks.later} group="later" toggle={p.toggle} tone="sage" /></aside>
+        </div>
+      </div>
+    </div>
+  </section>;
+}
+
+function BlendGroup({ title, subtitle, tasks, group, toggle, tone }: { title: string; subtitle: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"]; tone: string }) {
+  return <section className={`blend-group ${tone}`}><header><div><h3>{title} <span>{tasks.length}</span></h3><p>{subtitle}</p></div><button>＋</button></header>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}<button className="all">查看全部 →</button></section>;
 }
