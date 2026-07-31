@@ -22,9 +22,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .sidebar { min-height: 100vh; position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; padding: 28px 16px; border-right: 1px solid var(--cobalt); background: var(--cobalt); color: white; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 4px 36px; }
 .brand > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--tomato); color: white; font-size: 12px; font-weight: 800; }
-.brand strong, .brand small { display: block; }
+.brand strong { display: block; }
 .brand strong { font-size: 15px; font-weight: 750; }
-.brand small { margin-top: 4px; color: rgba(255,255,255,.76); font-size: 10px; line-height: 1.2; letter-spacing: .08em; }
 .sidebar nav { display: grid; gap: 3px; }
 .sidebar nav button { min-height: 45px; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; padding: 0 8px; border: 0; border-bottom: 1px solid transparent; background: transparent; color: rgba(255,255,255,.76); text-align: left; }
 .sidebar nav button > span { color: rgba(255,255,255,.68); font-size: 10px; }
@@ -33,7 +32,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .sidebar nav button.active { border-bottom: 2px solid white; background: rgba(255,255,255,.13); color: white; font-weight: 800; }
 .sidebar nav button.active > span { color: white; }
 .sidebar button:focus-visible { outline-color: rgba(255,255,255,.8); }
-.sidebar-quote { margin: auto 6px 0; color: rgba(255,255,255,.78); font-size: 12px; line-height: 1.7; }
 .content { min-width: 0; }
 .page { width: min(1180px, 94%); margin: auto; padding: 24px 0 42px; }
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 96px; padding: 15px 0 18px; border-bottom: 1px solid var(--ink); }
@@ -63,7 +61,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .quick-icon { position: relative; width: 20px; height: 20px; border-radius: 50%; background: var(--cobalt); }
 .quick-icon::before, .quick-icon::after { content: ""; position: absolute; top: 9px; left: 5px; width: 10px; height: 2px; background: white; }
 .quick-icon::after { transform: rotate(90deg); }
-.avatar { flex: 0 0 40px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--lemon); font-size: 13px; }
 .board { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(300px,.85fr); gap: 14px; margin-top: 18px; }
 .side-areas { min-width: 0; display: grid; gap: 14px; }
 .task-area { min-width: 0; display: flex; flex-direction: column; overflow: visible; border: 1px solid var(--ink); background: var(--paper); }
@@ -73,7 +70,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .area-later { background: var(--sky); }
 .area-header { min-height: 38px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .area-header > div { display: flex; gap: 10px; align-items: start; }
-.area-header > div > span { color: var(--tomato); font-size: 11px; font-weight: 700; padding-top: 3px; }
 .area-header h2 { margin: 0; font-size: 17px; font-weight: 800; }
 .area-header h2 em { color: #625f58; font-size: 12px; font-style: normal; font-weight: 500; }
 .area-header p { margin: 4px 0 0; color: #5f5b54; font-size: 12px; }
@@ -99,8 +95,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .task-copy .priority-tag { background: var(--tomato); color: white; }
 .edit-input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--cobalt); background: white; }
 .priority-button, .more { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: #777169; font-weight: 900; }
-.priority-button > span { width: 16px; height: 16px; display: block; background: currentColor; clip-path: polygon(50% 0,61% 35%,98% 35%,68% 56%,79% 92%,50% 70%,21% 92%,32% 56%,2% 35%,39% 35%); }
+.priority-button > span::before { content: "☆"; display: block; font-size: 22px; line-height: 1; font-weight: 400; }
+.priority-button.active > span::before { content: "★"; }
 .priority-button.active { color: var(--tomato); }
+.more { font-size: 16px; font-weight: 400; letter-spacing: 1px; }
 .priority-button + .menu-wrap { margin-left: -8px; }
 .menu-wrap { position: relative; }
 .task-menu { position: absolute; z-index: 20; top: 39px; right: 0; width: 142px; display: grid; padding: 6px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 rgba(36,34,31,.16); }
@@ -138,7 +136,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .workbench { grid-template-columns: 76px minmax(0,1fr); }
   .sidebar { padding-inline: 12px; }
   .brand { justify-content: center; padding-inline: 0; }
-  .brand > div, .sidebar nav button em, .sidebar-quote { display: none; }
+  .brand > div, .sidebar nav button em { display: none; }
   .sidebar nav button { grid-template-columns: 1fr; justify-items: center; padding: 0; text-align: center; }
   .sidebar nav button > span { display: none; }
   .board { grid-template-columns: 1fr; }
@@ -150,7 +148,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 @media (max-width: 640px) {
   .workbench { display: block; padding-bottom: 72px; }
   .sidebar { min-height: 0; position: fixed; z-index: 60; inset: auto 0 0; height: 66px; display: block; padding: 6px; border: 0; background: rgba(49,87,183,.97); backdrop-filter: blur(12px); }
-  .brand, .sidebar-quote { display: none; }
+  .brand { display: none; }
   .sidebar nav { grid-template-columns: repeat(4,1fr); }
   .sidebar nav button { min-height: 52px; font-size: 10px; }
   .sidebar nav button > span { display: block; font-size: 7px; }
@@ -159,7 +157,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .hero { display: block; padding: 10px 0 16px; }
   .hero h1 { font-size: clamp(21px, 6.2vw, 28px); white-space: nowrap; }
   .hero-tools { margin-top: 16px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; justify-content: stretch; }
-  .hero-tools .avatar { display: none; }
   .mood-block { min-width: 0; }
   .mood-block small { text-align: left; }
   .moods { width: 100%; }

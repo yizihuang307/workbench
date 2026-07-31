@@ -25,7 +25,6 @@ type Deleted = { task: Task; group: Group; index: number };
 const STORAGE_KEY = "workbench.schedule.v1";
 const GROUPS: Group[] = ["today", "week", "later"];
 const GROUP_NAME: Record<Group, string> = { today: "今日安排", week: "本周安排", later: "后续安排" };
-const GROUP_NO: Record<Group, string> = { today: "01", week: "02", later: "03" };
 const initialTasks: Tasks = {
   today: [
     makeTask("整理周会要点", { done: true }),
@@ -229,14 +228,13 @@ export default function Home() {
 
   return <main className="workbench" aria-busy={!ready}>
     <aside className="sidebar">
-      <div className="brand"><span>我</span><div><strong>我的工作台</strong><small>PERSONAL DESK</small></div></div>
+      <div className="brand"><span>我</span><div><strong>我的工作台</strong></div></div>
       <nav aria-label="主导航">
         <button className="active"><span>01</span>安排</button>
         <button onClick={() => setNotice("记录功能即将开放")}><span>02</span>记录 <em>即将开放</em></button>
         <button onClick={() => setNotice("信息功能即将开放")}><span>03</span>信息 <em>即将开放</em></button>
         <button onClick={() => document.getElementById("mood")?.focus()}><span>04</span>心情</button>
       </nav>
-      <p className="sidebar-quote">把事情放到合适的位置，<br />然后只看眼前这一件。</p>
     </aside>
 
     <section className="content">
@@ -246,7 +244,6 @@ export default function Home() {
           <div className="hero-tools">
             <div className="mood-block"><small>此刻感觉怎么样？</small><Mood value={store.mood} onChange={(mood) => setStore((current) => ({ ...current, mood }))} /></div>
             <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
-            <b className="avatar" aria-label="用户头像">菠</b>
           </div>
         </header>
 
@@ -292,7 +289,7 @@ function TaskArea({ group, tasks, onExpand, expandRef, featured = false, expande
   const complete = tasks.filter((task) => task.done).length;
   return <section className={`task-area area-${group} ${featured ? "featured" : ""} ${expanded ? "expanded" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
-    <header className="area-header"><div><span>{GROUP_NO[group]}</span><div><h2>{GROUP_NAME[group]} <em>{tasks.length}</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
+    <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {tasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
       {!expanded && <button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button>}
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
@@ -308,7 +305,7 @@ function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, value
   const [value, setValue] = useState("");
   const input = useRef<HTMLInputElement>(null);
   function submit() { if (onAdd(group, value)) { setValue(""); requestAnimationFrame(() => input.current?.focus()); } }
-  return <div className="task-input"><button onClick={submit} aria-label={`添加到${GROUP_NAME[group]}`}>＋</button><input ref={input} value={value} maxLength={200} placeholder={`添加${GROUP_NAME[group].replace("安排", "")}任务`}
+  return <div className="task-input"><button onClick={submit} aria-label={`添加到${GROUP_NAME[group]}`}>＋</button><input ref={input} value={value} maxLength={200} placeholder={`添加${GROUP_NAME[group].replace("安排", "")}事项`}
     onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) submit(); }} /><small>{value.length ? `${value.length}/200` : "↵"}</small></div>;
 }
 
@@ -344,7 +341,7 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
         onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">最优先</em>}{task.legacy && <em>昨日遗留</em>}</div>}
     </div>
     {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消最优先" : "标记为最优先"} aria-pressed={task.priority}><span aria-hidden /></button>}
-    <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>•••</button>
+    <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>···</button>
       {menuOpen && <div className="task-menu" role="menu">
         <button onClick={() => { setEditing(true); setMenuOpen(false); }}>编辑</button>
         {GROUPS.filter((target) => target !== group).map((target) => <button key={target} onClick={() => { actions.moveTask(group, task.id, target); setMenuOpen(false); }}>移到{GROUP_NAME[target].replace("安排", "")}</button>)}
