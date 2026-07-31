@@ -222,7 +222,7 @@ button { cursor: pointer; }
   :root { --rail: 0px; }
   .site { padding: 0 0 62px; }
   .direction-rail { display: none; }
-  .mobile-directions { position: fixed; z-index: 60; bottom: 0; left: 0; right: 0; height: 58px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 7px; border-top: 1px solid #ddd9d0; background: rgba(255,255,255,.94); backdrop-filter: blur(14px); }
+  .mobile-directions { position: fixed; z-index: 60; bottom: 0; left: 0; right: 0; height: 58px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; padding: 7px; border-top: 1px solid #ddd9d0; background: rgba(255,255,255,.94); backdrop-filter: blur(14px); }
   .mobile-directions button { border: 0; border-radius: 8px; background: transparent; color: #8e8a82; font-size: 8px; }
   .mobile-directions button b { display: block; margin-bottom: 2px; font: 8px monospace; }
   .mobile-directions button.active { background: #edefe9; color: #5f7053; }
@@ -309,3 +309,61 @@ button { cursor: pointer; }
 .direction-blend .blend-group.sage { background: var(--bf-green); }
 .direction-blend .blend-group header button { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-white); }
 .direction-blend .blend-group .all { color: var(--bf-ink); font-weight: 700; }
+
+/* 05 — bright ivory editorial magazine */
+.direction-editorial {
+  --ed-ivory: #F5F0E6;
+  --ed-paper: #FFFDF8;
+  --ed-cobalt: #3157B7;
+  --ed-tomato: #E65D45;
+  --ed-lemon: #F0CF64;
+  --ed-sky: #DCE8F4;
+  --ed-ink: #201F1C;
+  --ed-muted: #77736B;
+  --ed-line: #C9C2B7;
+}
+.direction-editorial .direction-rail { background: var(--ed-cobalt); }
+.direction-editorial .direction-rail button { color: rgba(255,255,255,.72); }
+.direction-editorial .direction-rail button span,
+.direction-editorial .direction-rail button small { color: rgba(255,255,255,.48); }
+.direction-editorial .direction-rail button.active { border-radius: 0; background: var(--ed-paper); color: var(--ed-cobalt); }
+.direction-editorial .direction-rail button.active span,
+.direction-editorial .direction-rail button.active small { color: var(--ed-cobalt); }
+.direction-editorial .blend-view { background: var(--ed-ivory); color: var(--ed-ink); }
+.direction-editorial .blend-side { border-right: 1px solid var(--ed-line); background: var(--ed-paper); }
+.direction-editorial .blend-brand > span { border-radius: 50%; background: var(--ed-tomato); color: white; }
+.direction-editorial .blend-brand strong { font: 700 14px Georgia, "Songti SC", serif; }
+.direction-editorial .blend-brand small,
+.direction-editorial .blend-settings { color: var(--ed-muted); }
+.direction-editorial .blend-side nav button { border-radius: 0; color: var(--ed-muted); }
+.direction-editorial .blend-side nav button.active { border-bottom: 2px solid var(--ed-cobalt); background: transparent; color: var(--ed-cobalt); }
+.direction-editorial .blend-top { border-bottom: 1px solid var(--ed-line); background: var(--ed-ivory); }
+.direction-editorial .blend-top > span { color: var(--ed-cobalt); font-weight: 700; letter-spacing: .08em; }
+.direction-editorial .blend-top button { border: 0; border-radius: 0; background: var(--ed-cobalt); color: white; font-weight: 700; }
+.direction-editorial .blend-top b { background: var(--ed-lemon); color: var(--ed-ink); }
+.direction-editorial .blend-heading { padding-bottom: 20px; border-bottom: 1px solid var(--ed-ink); }
+.direction-editorial .blend-heading p { color: var(--ed-tomato); font-weight: 800; letter-spacing: .12em; }
+.direction-editorial .blend-heading h1 { max-width: 700px; color: var(--ed-ink); font: 700 34px/1.18 Georgia, "Songti SC", serif; letter-spacing: -.045em; }
+.direction-editorial .blend-heading .moods { border: 1px solid var(--ed-line); border-radius: 0; background: var(--ed-paper); }
+.direction-editorial .moods button { border-radius: 0; background: transparent; color: var(--ed-muted); }
+.direction-editorial .moods button.active { background: var(--ed-lemon); color: var(--ed-ink); }
+.direction-editorial .blend-today,
+.direction-editorial .blend-group { border: 1px solid var(--ed-ink); border-radius: 0; box-shadow: none; }
+.direction-editorial .blend-today { background: var(--ed-paper); }
+.direction-editorial .blend-title i { border-radius: 0; background: var(--ed-tomato); box-shadow: none; }
+.direction-editorial .blend-title h2,
+.direction-editorial .blend-group h3 { font-family: Georgia, "Songti SC", serif; }
+.direction-editorial .blend-title span { border-radius: 0; background: var(--ed-cobalt); color: white; }
+.direction-editorial .blend-today .add-task { border: 1px solid var(--ed-cobalt); border-radius: 0; background: white; }
+.direction-editorial .blend-today .add-task button { color: var(--ed-cobalt); }
+.direction-editorial .check-task { border-bottom-color: #DED8CE; }
+.direction-editorial .check-box { border-color: var(--ed-cobalt); border-radius: 50%; }
+.direction-editorial .check-task input:checked + .check-box { border-color: var(--ed-cobalt); background: var(--ed-cobalt); }
+.direction-editorial .check-task.priority .check-label { color: var(--ed-tomato); font-weight: 800; }
+.direction-editorial .check-task .priority-tag,
+.direction-editorial .priority-toggle.active { border-radius: 0; background: var(--ed-tomato); color: white; }
+.direction-editorial .blend-today footer b { background: var(--ed-cobalt); }
+.direction-editorial .blend-group.yellow { background: var(--ed-lemon); }
+.direction-editorial .blend-group.sage { background: var(--ed-sky); }
+.direction-editorial .blend-group header button { border-color: var(--ed-ink); border-radius: 50%; background: transparent; }
+.direction-editorial .blend-group .all { color: var(--ed-cobalt); font-weight: 700; }

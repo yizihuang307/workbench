@@ -10,6 +10,7 @@ const directions = [
   { id: "journal", no: "02", name: "Bento 手账", note: "拼贴与个人感" },
   { id: "precision", no: "03", name: "精密工具", note: "密度与效率" },
   { id: "blend", no: "04", name: "杂志撞色", note: "Block Frame 配色" },
+  { id: "editorial", no: "05", name: "编辑杂志", note: "象牙白・钴蓝・番茄红" },
 ] as const;
 
 const initialTasks: Record<Group, Task[]> = {
@@ -38,7 +39,7 @@ const weekdayCopy: Record<string, string> = {
 };
 
 export default function Home() {
-  const [direction, setDirection] = useState<(typeof directions)[number]["id"]>("blend");
+  const [direction, setDirection] = useState<(typeof directions)[number]["id"]>("editorial");
   const [tasks, setTasks] = useState(initialTasks);
   const [draft, setDraft] = useState("");
   const [hideDone, setHideDone] = useState(false);
@@ -86,6 +87,7 @@ export default function Home() {
       {direction === "journal" && <JournalView {...shared} />}
       {direction === "precision" && <PrecisionView {...shared} />}
       {direction === "blend" && <BlendView {...shared} />}
+      {direction === "editorial" && <BlendView {...shared} />}
       <MobileDirectionBar direction={direction} setDirection={setDirection} />
     </main>
   );
