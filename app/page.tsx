@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type Task = { id: number; label: string; note?: string; done?: boolean; legacy?: boolean };
+type Task = { id: number; label: string; note?: string; done?: boolean; legacy?: boolean; priority?: boolean };
 type Group = "today" | "week" | "later";
 
 const directions = [
@@ -14,9 +14,9 @@ const directions = [
 
 const initialTasks: Record<Group, Task[]> = {
   today: [
-    { id: 1, label: "整理周会要点", note: "10:00", done: true },
-    { id: 2, label: "确认新版工作台的信息架构", legacy: true },
-    { id: 3, label: "回复设计评审意见", note: "今天 17:00" },
+    { id: 1, label: "整理周会要点", done: true },
+    { id: 2, label: "确认新版工作台的信息架构", legacy: true, priority: true },
+    { id: 3, label: "回复设计评审意见" },
     { id: 4, label: "准备明天的访谈提纲" },
   ],
   week: [
@@ -29,8 +29,16 @@ const initialTasks: Record<Group, Task[]> = {
   ],
 };
 
+const weekdayCopy: Record<string, string> = {
+  星期一: "新的一周，先拿下最关键的一件。",
+  星期二: "节奏起来了，今天想先推进什么？",
+  星期三: "走到周中，先把注意力放在一件事上。",
+  星期四: "离周末近了一点，先完成最重要的。",
+  星期五: "收好这一周，今天想先完成哪一件？",
+};
+
 export default function Home() {
-  const [direction, setDirection] = useState<(typeof directions)[number]["id"]>("minimal");
+  const [direction, setDirection] = useState<(typeof directions)[number]["id"]>("blend");
   const [tasks, setTasks] = useState(initialTasks);
   const [draft, setDraft] = useState("");
   const [hideDone, setHideDone] = useState(false);
@@ -55,7 +63,21 @@ export default function Home() {
     setDraft("");
   }
 
-  const shared = { tasks, visibleToday, draft, setDraft, addTask, toggle, hideDone, setHideDone, mood, setMood };
+  function togglePriority(id: number) {
+    setTasks((current) => ({
+      ...current,
+      today: current.today.map((task) => task.id === id ? { ...task, priority: !task.priority } : task),
+    }));
+  }
+
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long", timeZone: "Asia/Tokyo" }).format(now);
+  const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long", timeZone: "Asia/Tokyo" })
+    .format(now)
+    .replace("星期", " · 星期");
+  const focusCopy = weekdayCopy[weekday] ?? "今天不赶时间，先选一件真正想完成的事。";
+
+  const shared = { tasks, visibleToday, draft, setDraft, addTask, toggle, togglePriority, hideDone, setHideDone, mood, setMood, dateLabel, focusCopy };
 
   return (
     <main className={`site direction-${direction}`}>
@@ -76,10 +98,13 @@ type SharedProps = {
   setDraft: (value: string) => void;
   addTask: () => void;
   toggle: (group: Group, id: number) => void;
+  togglePriority: (id: number) => void;
   hideDone: boolean;
   setHideDone: (value: boolean) => void;
   mood: number;
   setMood: (value: number) => void;
+  dateLabel: string;
+  focusCopy: string;
 };
 
 function DirectionRail({ direction, setDirection }: {
@@ -120,14 +145,22 @@ function Mood({ value, onChange, compact = false }: { value: number; onChange: (
   </div>;
 }
 
-function CheckTask({ task, onToggle, dense = false }: { task: Task; onToggle: () => void; dense?: boolean }) {
+function CheckTask({ task, onToggle, dense = false, priorityEnabled = false, onPriority }: { task: Task; onToggle: () => void; dense?: boolean; priorityEnabled?: boolean; onPriority?: () => void }) {
   return (
-    <label className={`check-task ${task.done ? "done" : ""} ${dense ? "dense" : ""}`}>
+    <label className={`check-task ${task.done ? "done" : ""} ${task.priority ? "priority" : ""} ${dense ? "dense" : ""}`}>
       <input type="checkbox" checked={Boolean(task.done)} onChange={onToggle} />
       <span className="check-box">✓</span>
       <span className="check-label">{task.label}</span>
       {task.legacy && <em>昨日遗留</em>}
+      {task.priority && <em className="priority-tag">最优先</em>}
       {task.note && <small>{task.note}</small>}
+      {priorityEnabled && !task.done && <button
+        type="button"
+        className={`priority-toggle ${task.priority ? "active" : ""}`}
+        aria-label={task.priority ? "取消最优先" : "标记为最优先"}
+        title={task.priority ? "取消最优先" : "标记为最优先"}
+        onClick={(event) => { event.preventDefault(); event.stopPropagation(); onPriority?.(); }}
+      >!</button>}
       <span className="grip">⠿</span>
     </label>
   );
@@ -187,7 +220,6 @@ function JournalView(p: SharedProps) {
       <section className="paper week-paper"><div className="pin" /><div className="paper-title"><span>02</span><h2>本周安排</h2></div>{p.tasks.week.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => p.toggle("week", task.id)} />)}</section>
       <section className="paper later-paper"><div className="paper-title"><span>03</span><h2>后续安排</h2></div>{p.tasks.later.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => p.toggle("later", task.id)} />)}</section>
       <section className="mood-note"><strong>今天的心情天气</strong><Mood value={p.mood} onChange={p.setMood} /><small>点一个最像此刻的表情</small></section>
-      <button className="record-note"><b>✎</b><span>记下一闪而过的想法<small>随手记 · 会议纪要</small></span><i>→</i></button>
     </div>
   </section>;
 }
@@ -225,21 +257,20 @@ function BlendView(p: SharedProps) {
     <aside className="blend-side">
       <div className="blend-brand"><span>我</span><div><strong>我的工作台</strong><small>今天也慢慢来</small></div></div>
       <nav><button className="active">⌁ <span>安排</span></button><button>▤ <span>记录</span></button><button>◇ <span>信息</span></button><button>☺ <span>心情</span></button></nav>
-      <div className="blend-record"><b>一闪而过的想法？</b><span>随手记 · 会议纪要</span><button>＋ 快速记录</button></div>
       <div className="blend-settings">⚙ 设置</div>
     </aside>
     <div className="blend-content">
-      <header className="blend-top"><span>7月31日 · 星期五</span><button>＋ 快速记录</button><b>菠</b></header>
+      <header className="blend-top"><span suppressHydrationWarning>{p.dateLabel}</span><button>＋ 快速记录</button><b>菠</b></header>
       <div className="blend-page">
-        <div className="blend-heading"><div><p>早上好，菠菜</p><h1>今天想先完成哪一件？</h1><span>还有 {p.tasks.today.filter((t) => !t.done).length} 项安排，不用着急。</span></div><div><small>此刻感觉怎么样？</small><Mood value={p.mood} onChange={p.setMood} compact /></div></div>
+        <div className="blend-heading"><div><p>早上好，菠菜</p><h1 suppressHydrationWarning>{p.focusCopy}</h1></div><div><small>此刻感觉怎么样？</small><Mood value={p.mood} onChange={p.setMood} compact /></div></div>
         <div className="blend-grid">
           <section className="blend-today">
             <div className="blend-title"><div><i /><h2>今日安排</h2><span>{p.tasks.today.length}</span></div><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label></div>
             <AddTask {...p} />
-            {p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} />)}
+            {p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} priorityEnabled onPriority={() => p.togglePriority(task.id)} />)}
             <footer><span>{p.tasks.today.filter((t) => t.done).length} / {p.tasks.today.length} 已完成</span><i><b style={{ width: `${p.tasks.today.filter((t) => t.done).length / p.tasks.today.length * 100}%` }} /></i></footer>
           </section>
-          <aside className="blend-stack"><BlendGroup title="本周安排" subtitle="接下来几天" tasks={p.tasks.week} group="week" toggle={p.toggle} tone="yellow" /><BlendGroup title="后续安排" subtitle="未来再处理" tasks={p.tasks.later} group="later" toggle={p.toggle} tone="sage" /></aside>
+          <aside className="blend-stack"><BlendGroup title="本周安排" subtitle="" tasks={p.tasks.week} group="week" toggle={p.toggle} tone="yellow" /><BlendGroup title="后续安排" subtitle="暂未安排到今日或本周" tasks={p.tasks.later} group="later" toggle={p.toggle} tone="sage" /></aside>
         </div>
       </div>
     </div>
@@ -247,5 +278,5 @@ function BlendView(p: SharedProps) {
 }
 
 function BlendGroup({ title, subtitle, tasks, group, toggle, tone }: { title: string; subtitle: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"]; tone: string }) {
-  return <section className={`blend-group ${tone}`}><header><div><h3>{title} <span>{tasks.length}</span></h3><p>{subtitle}</p></div><button>＋</button></header>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}<button className="all">查看全部 →</button></section>;
+  return <section className={`blend-group ${tone}`}><header><div><h3>{title} <span>{tasks.length}</span></h3>{subtitle && <p>{subtitle}</p>}</div><button>＋</button></header>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}<button className="all">查看全部 →</button></section>;
 }
