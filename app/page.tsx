@@ -1,284 +1,373 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type Task = { id: number; label: string; note?: string; done?: boolean; legacy?: boolean; priority?: boolean };
 type Group = "today" | "week" | "later";
+type Task = {
+  id: string;
+  label: string;
+  done: boolean;
+  priority: boolean;
+  legacy: boolean;
+  createdAt: number;
+};
+type Tasks = Record<Group, Task[]>;
+type Store = {
+  version: 1;
+  savedDate: string;
+  tasks: Tasks;
+  hideDone: boolean;
+  mood: number;
+  quickNotes: { id: string; text: string; createdAt: number }[];
+};
+type Deleted = { task: Task; group: Group; index: number };
 
-const directions = [
-  { id: "minimal", no: "01", name: "温和极简", note: "排版与留白" },
-  { id: "journal", no: "02", name: "Bento 手账", note: "拼贴与个人感" },
-  { id: "precision", no: "03", name: "精密工具", note: "密度与效率" },
-  { id: "blend", no: "04", name: "杂志撞色", note: "Block Frame 配色" },
-  { id: "editorial", no: "05", name: "编辑杂志", note: "象牙白・钴蓝・番茄红" },
-] as const;
-
-const initialTasks: Record<Group, Task[]> = {
+const STORAGE_KEY = "workbench.schedule.v1";
+const GROUPS: Group[] = ["today", "week", "later"];
+const GROUP_NAME: Record<Group, string> = { today: "今日安排", week: "本周安排", later: "后续安排" };
+const GROUP_NO: Record<Group, string> = { today: "01", week: "02", later: "03" };
+const initialTasks: Tasks = {
   today: [
-    { id: 1, label: "整理周会要点", done: true },
-    { id: 2, label: "确认新版工作台的信息架构", legacy: true, priority: true },
-    { id: 3, label: "回复设计评审意见" },
-    { id: 4, label: "准备明天的访谈提纲" },
+    makeTask("整理周会要点", { done: true }),
+    makeTask("确认新版工作台的信息架构", { legacy: true, priority: true }),
+    makeTask("回复设计评审意见", { priority: true }),
+    makeTask("准备明天的访谈提纲"),
   ],
-  week: [
-    { id: 5, label: "完成首页低保真原型", note: "周四" },
-    { id: 6, label: "梳理用户反馈清单", note: "周五" },
-  ],
-  later: [
-    { id: 7, label: "整理个人常用工具入口" },
-    { id: 8, label: "补充会议纪要模板" },
-  ],
+  week: [makeTask("完成首页低保真原型"), makeTask("梳理用户反馈清单")],
+  later: [makeTask("整理个人常用工具入口"), makeTask("补充会议纪要模板")],
 };
 
-const weekdayCopy: Record<string, string> = {
-  星期一: "新的一周，先拿下最关键的一件。",
-  星期二: "节奏起来了，今天想先推进什么？",
-  星期三: "走到周中，先把注意力放在一件事上。",
-  星期四: "离周末近了一点，先完成最重要的。",
-  星期五: "收好这一周，今天想先完成哪一件？",
-};
+function id() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function makeTask(label: string, patch: Partial<Task> = {}): Task {
+  return { id: id(), label, done: false, priority: false, legacy: false, createdAt: Date.now(), ...patch };
+}
+
+function localDate() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function emptyStore(): Store {
+  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [] };
+}
+
+function cleanTask(value: unknown): Task | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<Task>;
+  if (typeof item.label !== "string" || !item.label.trim()) return null;
+  return {
+    id: typeof item.id === "string" ? item.id : id(),
+    label: item.label.trim().slice(0, 200),
+    done: Boolean(item.done),
+    priority: Boolean(item.priority) && !item.done,
+    legacy: Boolean(item.legacy) && !item.done,
+    createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
+  };
+}
+
+function parseStore(raw: string): Store | null {
+  try {
+    const value = JSON.parse(raw) as Partial<Store>;
+    if (!value.tasks || typeof value.tasks !== "object") return null;
+    const tasks = Object.fromEntries(GROUPS.map((group) => [group, Array.isArray(value.tasks?.[group])
+      ? value.tasks[group].map(cleanTask).filter(Boolean) as Task[] : []])) as Tasks;
+    tasks.week = tasks.week.map((task) => ({ ...task, priority: false, legacy: false }));
+    tasks.later = tasks.later.map((task) => ({ ...task, priority: false, legacy: false }));
+    const today = localDate();
+    if (value.savedDate && value.savedDate !== today) {
+      tasks.today = tasks.today.map((task) => ({ ...task, legacy: !task.done || task.legacy, priority: task.done ? false : task.priority }));
+    }
+    return {
+      version: 1,
+      savedDate: today,
+      tasks,
+      hideDone: Boolean(value.hideDone),
+      mood: Number.isInteger(value.mood) ? Math.max(0, Math.min(4, Number(value.mood))) : 2,
+      quickNotes: Array.isArray(value.quickNotes) ? value.quickNotes.filter((note) => note && typeof note.text === "string").map((note) => ({ id: typeof note.id === "string" ? note.id : id(), text: note.text.slice(0, 2000), createdAt: typeof note.createdAt === "number" ? note.createdAt : Date.now() })).slice(-100) : [],
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
-  const [direction, setDirection] = useState<(typeof directions)[number]["id"]>("editorial");
-  const [tasks, setTasks] = useState(initialTasks);
-  const [draft, setDraft] = useState("");
-  const [hideDone, setHideDone] = useState(false);
-  const [mood, setMood] = useState(3);
+  const [store, setStore] = useState<Store>(emptyStore);
+  const [ready, setReady] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [expanded, setExpanded] = useState<Group | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [deleted, setDeleted] = useState<Deleted | null>(null);
+  const [dragged, setDragged] = useState<{ group: Group; id: string } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandButtons = useRef<Partial<Record<Group, HTMLButtonElement | null>>>({});
 
-  const visibleToday = useMemo(
-    () => (hideDone ? tasks.today.filter((task) => !task.done) : tasks.today),
-    [hideDone, tasks.today],
-  );
+  useEffect(() => {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? parseStore(raw) : null;
+    queueMicrotask(() => {
+      if (parsed) setStore(parsed);
+      else if (raw) {
+        setStore({ ...emptyStore(), tasks: { today: [], week: [], later: [] } });
+        setNotice("本地数据无法读取，已安全恢复为空状态");
+      }
+      setReady(true);
+    });
+  }, []);
 
-  function toggle(group: Group, id: number) {
-    setTasks((current) => ({
-      ...current,
-      [group]: current[group].map((task) => task.id === id ? { ...task, done: !task.done } : task),
-    }));
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...store, savedDate: localDate() }));
+    } catch {
+      queueMicrotask(() => setNotice("保存失败，请清理浏览器空间后重试"));
+    }
+  }, [ready, store]);
+
+  useEffect(() => {
+    function sync(event: StorageEvent) {
+      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      const parsed = parseStore(event.newValue);
+      if (parsed) {
+        setStore(parsed);
+        setNotice("已同步另一标签页的修改");
+      }
+    }
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen));
+    return () => document.body.classList.remove("modal-open");
+  }, [expanded, quickOpen]);
+
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+
+  function updateTasks(updater: (tasks: Tasks) => Tasks) {
+    setStore((current) => ({ ...current, tasks: updater(current.tasks), savedDate: localDate() }));
   }
 
-  function addTask() {
-    const label = draft.trim();
-    if (!label) return;
-    setTasks((current) => ({ ...current, today: [...current.today, { id: Date.now(), label }] }));
-    setDraft("");
+  function addTask(group: Group, label: string) {
+    const clean = label.trim().slice(0, 200);
+    if (!clean) return false;
+    updateTasks((tasks) => ({ ...tasks, [group]: [...tasks[group], makeTask(clean)] }));
+    return true;
   }
 
-  function togglePriority(id: number) {
-    setTasks((current) => ({
-      ...current,
-      today: current.today.map((task) => task.id === id ? { ...task, priority: !task.priority } : task),
-    }));
+  function toggleTask(group: Group, taskId: string) {
+    updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId
+      ? { ...task, done: !task.done, priority: !task.done ? false : task.priority, legacy: !task.done ? false : task.legacy } : task) }));
   }
 
-  const now = new Date();
-  const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long", timeZone: "Asia/Tokyo" }).format(now);
-  const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long", timeZone: "Asia/Tokyo" })
-    .format(now)
-    .replace("星期", " · 星期");
-  const focusCopy = weekdayCopy[weekday] ?? "今天不赶时间，先选一件真正想完成的事。";
+  function togglePriority(taskId: string) {
+    updateTasks((tasks) => ({ ...tasks, today: tasks.today.map((task) => task.id === taskId && !task.done ? { ...task, priority: !task.priority } : task) }));
+  }
 
-  const shared = { tasks, visibleToday, draft, setDraft, addTask, toggle, togglePriority, hideDone, setHideDone, mood, setMood, dateLabel, focusCopy };
+  function editTask(group: Group, taskId: string, label: string) {
+    const clean = label.trim().slice(0, 200);
+    if (!clean) return false;
+    updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId ? { ...task, label: clean } : task) }));
+    return true;
+  }
 
-  return (
-    <main className={`site direction-${direction}`}>
-      <DirectionRail direction={direction} setDirection={setDirection} />
-      {direction === "minimal" && <MinimalView {...shared} />}
-      {direction === "journal" && <JournalView {...shared} />}
-      {direction === "precision" && <PrecisionView {...shared} />}
-      {direction === "blend" && <BlendView {...shared} />}
-      {direction === "editorial" && <BlendView {...shared} />}
-      <MobileDirectionBar direction={direction} setDirection={setDirection} />
-    </main>
-  );
-}
+  function moveTask(from: Group, taskId: string, to: Group, beforeId?: string) {
+    if (from === to && taskId === beforeId) return;
+    updateTasks((tasks) => {
+      const task = tasks[from].find((item) => item.id === taskId);
+      if (!task) return tasks;
+      const next = { ...tasks, [from]: tasks[from].filter((item) => item.id !== taskId) };
+      const moved = { ...task, priority: to === "today" && !task.done ? task.priority : false, legacy: false };
+      const target = [...next[to]];
+      const index = beforeId ? target.findIndex((item) => item.id === beforeId) : -1;
+      target.splice(index < 0 ? target.length : index, 0, moved);
+      return { ...next, [to]: target };
+    });
+  }
 
-type SharedProps = {
-  tasks: Record<Group, Task[]>;
-  visibleToday: Task[];
-  draft: string;
-  setDraft: (value: string) => void;
-  addTask: () => void;
-  toggle: (group: Group, id: number) => void;
-  togglePriority: (id: number) => void;
-  hideDone: boolean;
-  setHideDone: (value: boolean) => void;
-  mood: number;
-  setMood: (value: number) => void;
-  dateLabel: string;
-  focusCopy: string;
-};
+  function nudgeTask(group: Group, taskId: string, delta: -1 | 1) {
+    updateTasks((tasks) => {
+      const list = [...tasks[group]];
+      const index = list.findIndex((task) => task.id === taskId);
+      const nextIndex = index + delta;
+      if (index < 0 || nextIndex < 0 || nextIndex >= list.length) return tasks;
+      [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
+      return { ...tasks, [group]: list };
+    });
+  }
 
-function DirectionRail({ direction, setDirection }: {
-  direction: string;
-  setDirection: (value: (typeof directions)[number]["id"]) => void;
-}) {
-  return (
-    <aside className="direction-rail">
-      <p className="rail-kicker">视觉方向</p>
-      {directions.map((item) => (
-        <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}>
-          <span>{item.no}</span>
-          <strong>{item.name}</strong>
-          <small>{item.note}</small>
-        </button>
-      ))}
-      <p className="rail-tip">内容相同<br />只比较设计</p>
+  function deleteTask(group: Group, taskId: string) {
+    const index = store.tasks[group].findIndex((task) => task.id === taskId);
+    if (index < 0) return;
+    const task = store.tasks[group][index];
+    updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].filter((item) => item.id !== taskId) }));
+    setDeleted({ task, group, index });
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setDeleted(null), 5000);
+  }
+
+  function undoDelete() {
+    if (!deleted) return;
+    updateTasks((tasks) => {
+      const list = [...tasks[deleted.group]];
+      list.splice(Math.min(deleted.index, list.length), 0, deleted.task);
+      return { ...tasks, [deleted.group]: list };
+    });
+    setDeleted(null);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }
+
+  function closeExpanded() {
+    const group = expanded;
+    setExpanded(null);
+    requestAnimationFrame(() => group && expandButtons.current[group]?.focus());
+  }
+
+  const today = new Date();
+  const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
+  const incomplete = store.tasks.today.filter((task) => !task.done).length;
+
+  const actions = { addTask, toggleTask, togglePriority, editTask, moveTask, nudgeTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
+
+  return <main className="workbench" aria-busy={!ready}>
+    <aside className="sidebar">
+      <div className="brand"><span>我</span><div><strong>我的工作台</strong><small>PERSONAL DESK</small></div></div>
+      <nav aria-label="主导航">
+        <button className="active"><span>01</span>安排</button>
+        <button onClick={() => setNotice("记录功能即将开放")}><span>02</span>记录 <em>即将开放</em></button>
+        <button onClick={() => setNotice("信息功能即将开放")}><span>03</span>信息 <em>即将开放</em></button>
+        <button onClick={() => document.getElementById("mood")?.focus()}><span>04</span>心情</button>
+      </nav>
+      <p className="sidebar-quote">把事情放到合适的位置，<br />然后只看眼前这一件。</p>
     </aside>
-  );
-}
 
-function MobileDirectionBar({ direction, setDirection }: {
-  direction: string;
-  setDirection: (value: (typeof directions)[number]["id"]) => void;
-}) {
-  return <div className="mobile-directions">{directions.map((item) => (
-    <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}>
-      <b>{item.no}</b>{item.name}
-    </button>
-  ))}</div>;
-}
+    <section className="content">
+      <header className="topbar"><span>{dateLabel}</span><button className="quick-button" onClick={() => setQuickOpen(true)}>＋ 快速记录</button><b aria-label="用户头像">菠</b></header>
+      <div className="page">
+        <header className="hero">
+          <div><p>TODAY / {String(today.getDate()).padStart(2, "0")}</p><h1>今天，先完成<br />真正重要的事。</h1><span>还有 {incomplete} 项安排等待处理</span></div>
+          <div className="mood-block"><small>此刻感觉怎么样？</small><Mood value={store.mood} onChange={(mood) => setStore((current) => ({ ...current, mood }))} /></div>
+        </header>
 
-function Mood({ value, onChange, compact = false }: { value: number; onChange: (v: number) => void; compact?: boolean }) {
-  return <div className={`moods ${compact ? "compact" : ""}`}>
-    {["☹", "◔", "•‿•", "◡̈", "✦"].map((face, index) => (
-      <button key={face} className={value === index ? "active" : ""} onClick={() => onChange(index)} aria-label={`心情 ${index + 1}`}>{face}</button>
-    ))}
-  </div>;
-}
-
-function CheckTask({ task, onToggle, dense = false, priorityEnabled = false, onPriority }: { task: Task; onToggle: () => void; dense?: boolean; priorityEnabled?: boolean; onPriority?: () => void }) {
-  return (
-    <label className={`check-task ${task.done ? "done" : ""} ${task.priority ? "priority" : ""} ${dense ? "dense" : ""}`}>
-      <input type="checkbox" checked={Boolean(task.done)} onChange={onToggle} />
-      <span className="check-box">✓</span>
-      <span className="check-label">{task.label}</span>
-      {task.legacy && <em>昨日遗留</em>}
-      {task.priority && <em className="priority-tag">最优先</em>}
-      {task.note && <small>{task.note}</small>}
-      {priorityEnabled && !task.done && <button
-        type="button"
-        className={`priority-toggle ${task.priority ? "active" : ""}`}
-        aria-label={task.priority ? "取消最优先" : "标记为最优先"}
-        title={task.priority ? "取消最优先" : "标记为最优先"}
-        onClick={(event) => { event.preventDefault(); event.stopPropagation(); onPriority?.(); }}
-      >!</button>}
-      <span className="grip">⠿</span>
-    </label>
-  );
-}
-
-function AddTask({ draft, setDraft, addTask, placeholder = "添加今天要做的事" }: Pick<SharedProps, "draft" | "setDraft" | "addTask"> & { placeholder?: string }) {
-  return <div className="add-task">
-    <button onClick={addTask} aria-label="添加任务">＋</button>
-    <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder={placeholder} />
-    <kbd>↵</kbd>
-  </div>;
-}
-
-function MinimalView(p: SharedProps) {
-  return <section className="minimal-view">
-    <header className="minimal-top">
-      <span className="wordmark">我的工作台</span>
-      <nav><b>安排</b><span>记录</span><span>信息</span><span>心情</span></nav>
-      <button className="text-button">＋ 快速记录</button>
-    </header>
-    <div className="minimal-body">
-      <div className="minimal-heading">
-        <p>7月31日 · 星期五</p>
-        <h1>今天，先做好眼前的事。</h1>
-        <span>还有 {p.tasks.today.filter((t) => !t.done).length} 项安排</span>
-      </div>
-      <div className="minimal-columns">
-        <section className="minimal-main">
-          <div className="plain-title"><h2>今日安排</h2><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label></div>
-          <AddTask {...p} />
-          <div className="plain-list">{p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} />)}</div>
-        </section>
-        <aside className="minimal-side">
-          <PlainGroup title="本周安排" tasks={p.tasks.week} group="week" toggle={p.toggle} />
-          <PlainGroup title="后续安排" tasks={p.tasks.later} group="later" toggle={p.toggle} />
-          <div className="minimal-mood"><span>此刻感觉</span><Mood value={p.mood} onChange={p.setMood} compact /></div>
-        </aside>
-      </div>
-    </div>
-  </section>;
-}
-
-function PlainGroup({ title, tasks, group, toggle }: { title: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"] }) {
-  return <section className="plain-group"><div><h3>{title}</h3><button>＋</button></div>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}</section>;
-}
-
-function JournalView(p: SharedProps) {
-  return <section className="journal-view">
-    <header className="journal-top"><div><i>我的</i><strong>工作台</strong></div><nav><b>安排</b><span>记录</span><span>信息</span><span>心情</span></nav><button>快速记录 ↗</button></header>
-    <div className="journal-board">
-      <div className="journal-greeting"><span>FRI · 07/31</span><h1>早上好，菠菜！</h1><p>今日份清单已经摆好啦。</p></div>
-      <section className="paper today-paper">
-        <div className="tape" /><div className="paper-title"><span>01</span><h2>今日安排</h2><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 收起完成项</label></div>
-        <AddTask {...p} placeholder="写下一件要做的小事…" />
-        {p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} />)}
-      </section>
-      <section className="paper week-paper"><div className="pin" /><div className="paper-title"><span>02</span><h2>本周安排</h2></div>{p.tasks.week.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => p.toggle("week", task.id)} />)}</section>
-      <section className="paper later-paper"><div className="paper-title"><span>03</span><h2>后续安排</h2></div>{p.tasks.later.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => p.toggle("later", task.id)} />)}</section>
-      <section className="mood-note"><strong>今天的心情天气</strong><Mood value={p.mood} onChange={p.setMood} /><small>点一个最像此刻的表情</small></section>
-    </div>
-  </section>;
-}
-
-function PrecisionView(p: SharedProps) {
-  return <section className="precision-view">
-    <aside className="tool-sidebar">
-      <div className="tool-brand"><span>W</span><strong>我的工作台</strong></div>
-      <nav><button className="active">⌁ <span>安排</span><kbd>⌘1</kbd></button><button>▤ <span>记录</span><kbd>⌘2</kbd></button><button>◇ <span>信息</span></button><button>☺ <span>心情</span></button></nav>
-      <div className="tool-bottom">⚙ 设置</div>
-    </aside>
-    <div className="tool-content">
-      <header className="tool-top"><div className="crumb">我的工作台 <span>/</span> 安排</div><button>＋ 新建任务</button><button>快速记录</button><b>菠</b></header>
-      <div className="tool-page">
-        <div className="tool-heading"><div><h1>安排</h1><p>2026年7月31日，星期五</p></div><Mood value={p.mood} onChange={p.setMood} compact /></div>
-        <div className="metric-row"><div><span>今日未完成</span><b>{p.tasks.today.filter((t) => !t.done).length}</b></div><div><span>本周待安排</span><b>{p.tasks.week.length}</b></div><div><span>后续事项</span><b>{p.tasks.later.length}</b></div></div>
-        <section className="tool-panel">
-          <div className="tool-panel-head"><h2>今日安排 <span>{p.tasks.today.length}</span></h2><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label><button>•••</button></div>
-          <AddTask {...p} placeholder="快速添加任务，按 Enter 保存" />
-          <div className="table-head"><span>任务</span><span>时间</span><span>状态</span><span /></div>
-          {p.visibleToday.map((task) => <div className="table-row" key={task.id}><CheckTask task={task} onToggle={() => p.toggle("today", task.id)} /><span>{task.note || "—"}</span><span className={task.done ? "status done-status" : "status"}>{task.done ? "已完成" : "待办"}</span><button>•••</button></div>)}
-        </section>
-        <div className="tool-groups"><ToolGroup title="本周安排" tasks={p.tasks.week} group="week" toggle={p.toggle} /><ToolGroup title="后续安排" tasks={p.tasks.later} group="later" toggle={p.toggle} /></div>
-      </div>
-    </div>
-  </section>;
-}
-
-function ToolGroup({ title, tasks, group, toggle }: { title: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"] }) {
-  return <section className="tool-small"><header><h3>{title} <span>{tasks.length}</span></h3><button>＋</button></header>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}</section>;
-}
-
-function BlendView(p: SharedProps) {
-  return <section className="blend-view">
-    <aside className="blend-side">
-      <div className="blend-brand"><span>我</span><div><strong>我的工作台</strong><small>今天也慢慢来</small></div></div>
-      <nav><button className="active">⌁ <span>安排</span></button><button>▤ <span>记录</span></button><button>◇ <span>信息</span></button><button>☺ <span>心情</span></button></nav>
-      <div className="blend-settings">⚙ 设置</div>
-    </aside>
-    <div className="blend-content">
-      <header className="blend-top"><span suppressHydrationWarning>{p.dateLabel}</span><button>＋ 快速记录</button><b>菠</b></header>
-      <div className="blend-page">
-        <div className="blend-heading"><div><p>早上好，菠菜</p><h1 suppressHydrationWarning>{p.focusCopy}</h1></div><div><small>此刻感觉怎么样？</small><Mood value={p.mood} onChange={p.setMood} compact /></div></div>
-        <div className="blend-grid">
-          <section className="blend-today">
-            <div className="blend-title"><div><i /><h2>今日安排</h2><span>{p.tasks.today.length}</span></div><label><input type="checkbox" checked={p.hideDone} onChange={(e) => p.setHideDone(e.target.checked)} /> 隐藏已完成</label></div>
-            <AddTask {...p} />
-            {p.visibleToday.map((task) => <CheckTask key={task.id} task={task} onToggle={() => p.toggle("today", task.id)} priorityEnabled onPriority={() => p.togglePriority(task.id)} />)}
-            <footer><span>{p.tasks.today.filter((t) => t.done).length} / {p.tasks.today.length} 已完成</span><i><b style={{ width: `${p.tasks.today.filter((t) => t.done).length / p.tasks.today.length * 100}%` }} /></i></footer>
-          </section>
-          <aside className="blend-stack"><BlendGroup title="本周安排" subtitle="" tasks={p.tasks.week} group="week" toggle={p.toggle} tone="yellow" /><BlendGroup title="后续安排" subtitle="暂未安排到今日或本周" tasks={p.tasks.later} group="later" toggle={p.toggle} tone="sage" /></aside>
+        <div className="board">
+          <TaskArea group="today" tasks={store.tasks.today} {...actions} onExpand={() => setExpanded("today")} expandRef={(node) => { expandButtons.current.today = node; }} featured />
+          <div className="side-areas">
+            <TaskArea group="week" tasks={store.tasks.week} {...actions} onExpand={() => setExpanded("week")} expandRef={(node) => { expandButtons.current.week = node; }} />
+            <TaskArea group="later" tasks={store.tasks.later} {...actions} onExpand={() => setExpanded("later")} expandRef={(node) => { expandButtons.current.later = node; }} />
+          </div>
         </div>
       </div>
+    </section>
+
+    {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
+      <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />
+    </Modal>}
+    {quickOpen && <QuickNote onClose={() => setQuickOpen(false)} onSave={(text) => {
+      setStore((current) => ({ ...current, quickNotes: [...current.quickNotes, { id: id(), text, createdAt: Date.now() }].slice(-100) }));
+      setQuickOpen(false); setNotice("快速记录已保存");
+    }} />}
+    {notice && <div className="toast" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="关闭提示">×</button></div>}
+    {deleted && <div className="undo" role="status"><span>已删除“{deleted.task.label}”</span><button onClick={undoDelete}>撤销</button></div>}
+  </main>;
+}
+
+type AreaActions = {
+  addTask: (group: Group, label: string) => boolean;
+  toggleTask: (group: Group, id: string) => void;
+  togglePriority: (id: string) => void;
+  editTask: (group: Group, id: string, label: string) => boolean;
+  moveTask: (from: Group, id: string, to: Group, beforeId?: string) => void;
+  nudgeTask: (group: Group, id: string, delta: -1 | 1) => void;
+  deleteTask: (group: Group, id: string) => void;
+  dragged: { group: Group; id: string } | null;
+  setDragged: (value: { group: Group; id: string } | null) => void;
+  hideDone: boolean;
+  setHideDone: (value: boolean) => void;
+};
+
+function TaskArea({ group, tasks, onExpand, expandRef, featured = false, expanded = false, ...actions }: AreaActions & {
+  group: Group; tasks: Task[]; onExpand: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
+}) {
+  const shown = useMemo(() => actions.hideDone ? tasks.filter((task) => !task.done) : tasks, [actions.hideDone, tasks]);
+  const complete = tasks.filter((task) => task.done).length;
+  return <section className={`task-area area-${group} ${featured ? "featured" : ""} ${expanded ? "expanded" : ""}`}
+    onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
+    <header className="area-header"><div><span>{GROUP_NO[group]}</span><div><h2>{GROUP_NAME[group]} <em>{tasks.length}</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
+      {!expanded && <button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button>}
+    </header>
+    <TaskInput group={group} onAdd={actions.addTask} />
+    <div className="task-list" aria-label={GROUP_NAME[group]}>
+      {shown.map((task, index) => <TaskRow key={task.id} task={task} group={group} index={index} total={tasks.length} {...actions} />)}
+      {!shown.length && <div className="empty"><b>✓</b><span>{actions.hideDone && tasks.length ? "完成项已隐藏" : "这里还没有安排"}</span></div>}
     </div>
+    {featured && <footer className="progress"><span>{complete} / {tasks.length} 已完成</span><i><b style={{ width: `${tasks.length ? complete / tasks.length * 100 : 0}%` }} /></i><label><input type="checkbox" checked={actions.hideDone} onChange={(event) => actions.setHideDone(event.target.checked)} /> 隐藏已完成</label></footer>}
   </section>;
 }
 
-function BlendGroup({ title, subtitle, tasks, group, toggle, tone }: { title: string; subtitle: string; tasks: Task[]; group: Group; toggle: SharedProps["toggle"]; tone: string }) {
-  return <section className={`blend-group ${tone}`}><header><div><h3>{title} <span>{tasks.length}</span></h3>{subtitle && <p>{subtitle}</p>}</div><button>＋</button></header>{tasks.map((task) => <CheckTask dense key={task.id} task={task} onToggle={() => toggle(group, task.id)} />)}<button className="all">查看全部 →</button></section>;
+function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, value: string) => boolean }) {
+  const [value, setValue] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  function submit() { if (onAdd(group, value)) { setValue(""); requestAnimationFrame(() => input.current?.focus()); } }
+  return <div className="task-input"><button onClick={submit} aria-label={`添加到${GROUP_NAME[group]}`}>＋</button><input ref={input} value={value} maxLength={200} placeholder={`添加${GROUP_NAME[group].replace("安排", "")}任务`}
+    onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) submit(); }} /><small>{value.length ? `${value.length}/200` : "↵"}</small></div>;
+}
+
+function TaskRow({ task, group, index, total, ...actions }: AreaActions & { task: Task; group: Group; index: number; total: number }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(task.label);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
+  function save() { if (actions.editTask(group, task.id, draft)) setEditing(false); else setDraft(task.label); }
+  return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing}
+    onDragStart={() => actions.setDragged({ group, id: task.id })} onDragEnd={() => actions.setDragged(null)}
+    onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group, task.id); actions.setDragged(null); }}>
+    <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
+    <div className="task-copy">
+      {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
+        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <span onDoubleClick={() => setEditing(true)}>{task.label}</span>}
+      <div>{task.legacy && <em>昨日遗留</em>}{task.priority && <em className="priority-tag">最优先</em>}</div>
+    </div>
+    {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消最优先" : "标记为最优先"} aria-pressed={task.priority}>!</button>}
+    <div className="menu-wrap"><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>•••</button>
+      {menuOpen && <div className="task-menu" role="menu">
+        <button onClick={() => { setEditing(true); setMenuOpen(false); }}>编辑</button>
+        <button disabled={index === 0} onClick={() => { actions.nudgeTask(group, task.id, -1); setMenuOpen(false); }}>上移</button>
+        <button disabled={index === total - 1} onClick={() => { actions.nudgeTask(group, task.id, 1); setMenuOpen(false); }}>下移</button>
+        {GROUPS.filter((target) => target !== group).map((target) => <button key={target} onClick={() => { actions.moveTask(group, task.id, target); setMenuOpen(false); }}>移到{GROUP_NAME[target].replace("安排", "")}</button>)}
+        <button className="danger" onClick={() => actions.deleteTask(group, task.id)}>删除</button>
+      </div>}
+    </div><span className="grip" aria-hidden>⠿</span>
+  </article>;
+}
+
+function Mood({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return <div id="mood" className="moods" tabIndex={-1}>{["很累", "一般", "平静", "不错", "很好"].map((label, index) => <button key={label} className={value === index ? "active" : ""} onClick={() => onChange(index)} aria-label={`心情：${label}`} aria-pressed={value === index}><span>{["☹", "◔", "•‿•", "◡̈", "✦"][index]}</span></button>)}</div>;
+}
+
+function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    box.current?.focus();
+    function key(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key === "Tab" && box.current) {
+        const focusable = [...box.current.querySelectorAll<HTMLElement>("button:not(:disabled), input, textarea")];
+        if (!focusable.length) return;
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal" ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${title}放大视图`}><button className="modal-close" onClick={onClose} aria-label="关闭">×</button>{children}</div></div>;
+}
+
+function QuickNote({ onSave, onClose }: { onSave: (text: string) => void; onClose: () => void }) {
+  const [text, setText] = useState("");
+  return <Modal title="快速记录" onClose={onClose}><section className="quick-note"><p>QUICK NOTE</p><h2>快速记录</h2><textarea autoFocus value={text} maxLength={2000} onChange={(event) => setText(event.target.value)} placeholder="先记下来，稍后再整理……" /><footer><span>{text.length}/2000</span><button onClick={onClose}>取消</button><button className="primary" disabled={!text.trim()} onClick={() => onSave(text.trim())}>保存记录</button></footer></section></Modal>;
 }
