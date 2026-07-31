@@ -9,7 +9,7 @@ const directions = [
   { id: "minimal", no: "01", name: "温和极简", note: "排版与留白" },
   { id: "journal", no: "02", name: "Bento 手账", note: "拼贴与个人感" },
   { id: "precision", no: "03", name: "精密工具", note: "密度与效率" },
-  { id: "blend", no: "04", name: "推荐组合", note: "轻盈且易落地" },
+  { id: "blend", no: "04", name: "杂志撞色", note: "Block Frame 配色" },
 ] as const;
 
 const initialTasks: Record<Group, Task[]> = {

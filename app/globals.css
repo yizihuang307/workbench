@@ -259,3 +259,53 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }
+
+/* 04 — editorial block-frame palette */
+.direction-blend {
+  --bf-pink: #FE90E8;
+  --bf-blue: #C0F7FE;
+  --bf-green: #99E885;
+  --bf-yellow: #F7CB46;
+  --bf-cream: #FFDC8B;
+  --bf-ink: #17150F;
+  --bf-white: #FFFEF8;
+  --bf-paper: #FFFDF5;
+}
+.direction-blend .direction-rail { background: var(--bf-ink); }
+.direction-blend .direction-rail button.active { background: var(--bf-pink); color: var(--bf-ink); }
+.direction-blend .direction-rail button.active span,
+.direction-blend .direction-rail button.active small { color: var(--bf-ink); }
+.direction-blend .blend-view { background: var(--bf-paper); color: var(--bf-ink); }
+.direction-blend .blend-side { border-right: 3px solid var(--bf-ink); background: var(--bf-cream); }
+.direction-blend .blend-brand > span { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-pink); color: var(--bf-ink); box-shadow: 3px 3px 0 var(--bf-ink); }
+.direction-blend .blend-brand small,
+.direction-blend .blend-settings { color: #5f563d; }
+.direction-blend .blend-side nav button { border-radius: 0; color: var(--bf-ink); }
+.direction-blend .blend-side nav button.active { border: 2px solid var(--bf-ink); background: var(--bf-blue); color: var(--bf-ink); box-shadow: 3px 3px 0 var(--bf-ink); }
+.direction-blend .blend-top { border-bottom: 3px solid var(--bf-ink); background: var(--bf-blue); }
+.direction-blend .blend-top > span { color: var(--bf-ink); font-weight: 700; }
+.direction-blend .blend-top button { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-yellow); color: var(--bf-ink); font-weight: 700; box-shadow: 3px 3px 0 var(--bf-ink); }
+.direction-blend .blend-top b { border: 2px solid var(--bf-ink); background: var(--bf-green); color: var(--bf-ink); }
+.direction-blend .blend-heading p { color: var(--bf-ink); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.direction-blend .blend-heading h1 { font-family: Arial, "PingFang SC", sans-serif; font-weight: 900; letter-spacing: -.055em; }
+.direction-blend .blend-heading .moods { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-white); box-shadow: 3px 3px 0 var(--bf-ink); }
+.direction-blend .moods button { border-radius: 0; color: var(--bf-ink); }
+.direction-blend .moods button.active { background: var(--bf-yellow); color: var(--bf-ink); }
+.direction-blend .blend-today,
+.direction-blend .blend-group { border: 3px solid var(--bf-ink); border-radius: 0; box-shadow: 6px 6px 0 var(--bf-ink); }
+.direction-blend .blend-today { background: var(--bf-white); }
+.direction-blend .blend-title i { border-radius: 0; background: var(--bf-pink); box-shadow: 0 0 0 3px var(--bf-ink); }
+.direction-blend .blend-title span { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-blue); color: var(--bf-ink); }
+.direction-blend .blend-today .add-task { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-cream); }
+.direction-blend .check-task { border-bottom-color: var(--bf-ink); }
+.direction-blend .check-box { border: 2px solid var(--bf-ink); border-radius: 0; }
+.direction-blend .check-task input:checked + .check-box { border-color: var(--bf-ink); background: var(--bf-green); color: var(--bf-ink); }
+.direction-blend .check-task.priority .check-label { color: var(--bf-ink); font-weight: 900; }
+.direction-blend .check-task .priority-tag,
+.direction-blend .priority-toggle.active { border-color: var(--bf-ink); border-radius: 0; background: var(--bf-pink); color: var(--bf-ink); }
+.direction-blend .blend-today footer > i { border: 1px solid var(--bf-ink); border-radius: 0; background: var(--bf-white); }
+.direction-blend .blend-today footer b { background: var(--bf-green); }
+.direction-blend .blend-group.yellow { background: var(--bf-blue); }
+.direction-blend .blend-group.sage { background: var(--bf-green); }
+.direction-blend .blend-group header button { border: 2px solid var(--bf-ink); border-radius: 0; background: var(--bf-white); }
+.direction-blend .blend-group .all { color: var(--bf-ink); font-weight: 700; }
