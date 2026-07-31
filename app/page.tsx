@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -178,6 +178,15 @@ export default function Home() {
     updateTasks((tasks) => {
       const task = tasks[from].find((item) => item.id === taskId);
       if (!task) return tasks;
+      if (from === to && beforeId) {
+        const list = [...tasks[from]];
+        const fromIndex = list.findIndex((item) => item.id === taskId);
+        const targetIndex = list.findIndex((item) => item.id === beforeId);
+        if (fromIndex < 0 || targetIndex < 0) return tasks;
+        list.splice(fromIndex, 1);
+        list.splice(targetIndex, 0, task);
+        return { ...tasks, [from]: list };
+      }
       const next = { ...tasks, [from]: tasks[from].filter((item) => item.id !== taskId) };
       const moved = { ...task, priority: to === "today" && !task.done ? task.priority : false, legacy: false };
       const target = [...next[to]];
@@ -191,7 +200,9 @@ export default function Home() {
     updateTasks((tasks) => {
       const list = [...tasks[group]];
       const index = list.findIndex((task) => task.id === taskId);
-      const nextIndex = index + delta;
+      const movableIndices = store.hideDone ? list.map((task, taskIndex) => !task.done ? taskIndex : -1).filter((taskIndex) => taskIndex >= 0) : list.map((_, taskIndex) => taskIndex);
+      const visibleIndex = movableIndices.indexOf(index);
+      const nextIndex = movableIndices[visibleIndex + delta] ?? -1;
       if (index < 0 || nextIndex < 0 || nextIndex >= list.length) return tasks;
       [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
       return { ...tasks, [group]: list };
@@ -219,11 +230,11 @@ export default function Home() {
     if (undoTimer.current) clearTimeout(undoTimer.current);
   }
 
-  function closeExpanded() {
+  const closeExpanded = useCallback(() => {
     const group = expanded;
     setExpanded(null);
     requestAnimationFrame(() => group && expandButtons.current[group]?.focus());
-  }
+  }, [expanded]);
 
   const today = new Date();
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
@@ -299,7 +310,7 @@ function TaskArea({ group, tasks, onExpand, expandRef, featured = false, expande
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
     <div className="task-list" aria-label={GROUP_NAME[group]}>
-      {shown.map((task, index) => <TaskRow key={task.id} task={task} group={group} index={index} total={tasks.length} {...actions} />)}
+      {shown.map((task, index) => <TaskRow key={task.id} task={task} group={group} index={index} total={shown.length} {...actions} />)}
       {!shown.length && <div className="empty"><b>✓</b><span>{actions.hideDone && tasks.length ? "完成项已隐藏" : "这里还没有安排"}</span></div>}
     </div>
     {featured && <footer className="progress"><span>{complete} / {tasks.length} 已完成</span><i><b style={{ width: `${tasks.length ? complete / tasks.length * 100 : 0}%` }} /></i><label><input type="checkbox" checked={actions.hideDone} onChange={(event) => actions.setHideDone(event.target.checked)} /> 隐藏已完成</label></footer>}
