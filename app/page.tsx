@@ -61,7 +61,7 @@ function cleanTask(value: unknown): Task | null {
     id: typeof item.id === "string" ? item.id : id(),
     label: item.label.trim().slice(0, 200),
     done: Boolean(item.done),
-    priority: Boolean(item.priority) && !item.done,
+    priority: Boolean(item.priority),
     legacy: Boolean(item.legacy) && !item.done,
     createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
   };
@@ -77,7 +77,7 @@ function parseStore(raw: string): Store | null {
     tasks.later = tasks.later.map((task) => ({ ...task, priority: false, legacy: false }));
     const today = localDate();
     if (value.savedDate && value.savedDate !== today) {
-      tasks.today = tasks.today.map((task) => ({ ...task, legacy: !task.done || task.legacy, priority: task.done ? false : task.priority }));
+      tasks.today = tasks.today.map((task) => ({ ...task, legacy: !task.done || task.legacy }));
     }
     return {
       version: 1,
@@ -158,11 +158,11 @@ export default function Home() {
 
   function toggleTask(group: Group, taskId: string) {
     updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId
-      ? { ...task, done: !task.done, priority: !task.done ? false : task.priority, legacy: !task.done ? false : task.legacy } : task) }));
+      ? { ...task, done: !task.done, legacy: !task.done ? false : task.legacy } : task) }));
   }
 
   function togglePriority(taskId: string) {
-    updateTasks((tasks) => ({ ...tasks, today: tasks.today.map((task) => task.id === taskId && !task.done ? { ...task, priority: !task.priority } : task) }));
+    updateTasks((tasks) => ({ ...tasks, today: tasks.today.map((task) => task.id === taskId ? { ...task, priority: !task.priority } : task) }));
   }
 
   function editTask(group: Group, taskId: string, label: string) {
@@ -187,7 +187,7 @@ export default function Home() {
         return { ...tasks, [from]: list };
       }
       const next = { ...tasks, [from]: tasks[from].filter((item) => item.id !== taskId) };
-      const moved = { ...task, priority: to === "today" && !task.done ? task.priority : false, legacy: false };
+      const moved = { ...task, priority: to === "today" ? task.priority : false, legacy: false };
       const target = [...next[to]];
       const index = beforeId ? target.findIndex((item) => item.id === beforeId) : -1;
       target.splice(index < 0 ? target.length : index, 0, moved);
@@ -338,9 +338,9 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
     <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
     <div className="task-copy">
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
-        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">最优先</em>}{task.legacy && <em>昨日遗留</em>}</div>}
+        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.legacy && <em>昨日遗留</em>}</div>}
     </div>
-    {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消最优先" : "标记为最优先"} aria-pressed={task.priority}><span aria-hidden /></button>}
+    {group === "today" && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
     <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>···</button>
       {menuOpen && <div className="task-menu" role="menu">
         <button onClick={() => { setEditing(true); setMenuOpen(false); }}>编辑</button>
