@@ -18,11 +18,25 @@ export function parseRecordStore(raw: string): RecordStore | null {
   try {
     const value = JSON.parse(raw) as Partial<RecordStore>;
     if (!Array.isArray(value.categories) || !Array.isArray(value.records)) return null;
-    const categories = value.categories.filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && item.name.trim()).map((item) => ({ id: item.id, name: item.name.trim().slice(0, 40), createdAt: Number(item.createdAt) || Date.now() }));
+    const seenCategoryIds = new Set<string>();
+    const seenCategoryNames = new Set<string>();
+    const categories = value.categories.filter((item) => {
+      if (!item || typeof item.id !== "string" || typeof item.name !== "string") return false;
+      const name = item.name.trim().slice(0, 40);
+      if (!name || seenCategoryIds.has(item.id) || seenCategoryNames.has(name)) return false;
+      seenCategoryIds.add(item.id);
+      seenCategoryNames.add(name);
+      return true;
+    }).map((item) => ({ id: item.id, name: item.name.trim().slice(0, 40), createdAt: Number(item.createdAt) || Date.now() }));
     if (!categories.length) return null;
     const categoryIds = new Set(categories.map((item) => item.id));
     const fallback = categoryIds.has(value.defaultCategoryId ?? "") ? String(value.defaultCategoryId) : categories[0].id;
-    const records = value.records.filter((item) => item && typeof item.id === "string" && typeof item.body === "string").map((item) => ({
+    const seenRecordIds = new Set<string>();
+    const records = value.records.filter((item) => {
+      if (!item || typeof item.id !== "string" || typeof item.body !== "string" || seenRecordIds.has(item.id)) return false;
+      seenRecordIds.add(item.id);
+      return true;
+    }).map((item) => ({
       id: item.id,
       categoryId: categoryIds.has(item.categoryId) ? item.categoryId : fallback,
       body: item.body.slice(0, 30000),
@@ -40,6 +54,12 @@ export function visibleRecords(store: RecordStore, categoryId: string, query: st
   const needle = query.trim().toLocaleLowerCase();
   return store.records.filter((item) => (categoryId === "all" || item.categoryId === categoryId) && (!needle || item.body.toLocaleLowerCase().includes(needle)))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+}
+
+export function validCategoryName(categories: RecordCategory[], name: string, currentId?: string) {
+  const clean = name.trim().slice(0, 40);
+  if (!clean || categories.some((item) => item.id !== currentId && item.name === clean)) return null;
+  return clean;
 }
 
 export function moveAndDeleteCategory(store: RecordStore, fromId: string, toId: string): RecordStore {

@@ -1,12 +1,12 @@
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return Response.json({ error: "AI 服务尚未配置" }, { status: 503 });
   let content = "";
   try {
     const body = await request.json() as { content?: unknown };
     content = typeof body.content === "string" ? body.content.trim().slice(0, 30000) : "";
   } catch { return Response.json({ error: "请求内容无效" }, { status: 400 }); }
   if (!content) return Response.json({ error: "记录正文不能为空" }, { status: 400 });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return Response.json({ error: "AI 服务尚未配置" }, { status: 503 });
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       }),
     });
     const data = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ type?: string; text?: string }> }>; error?: { message?: string } };
-    if (!response.ok) return Response.json({ error: data.error?.message || "AI 服务暂时不可用" }, { status: 502 });
+    if (!response.ok) return Response.json({ error: "AI 服务暂时不可用" }, { status: 502 });
     const result = data.output_text || data.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
     if (!result) return Response.json({ error: "AI 未返回整理结果" }, { status: 502 });
     return Response.json({ result });

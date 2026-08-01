@@ -162,7 +162,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .record-card { position: relative; min-height: 96px; display: grid; grid-template-columns: 38px minmax(0,1fr) 38px; align-items: start; gap: 3px; padding: 13px 7px; border-bottom: 1px solid #ddd6cb; cursor: pointer; }
 .record-card:hover { background: #f8f5ed; }
 .record-card.selected { background: #eef3ff; box-shadow: inset 3px 0 0 var(--cobalt); }
-.record-card .pin, .record-delete { width: 38px; height: 44px; border: 0; background: transparent; color: #8a857c; font-size: 17px; }
+.record-card .pin, .record-delete { width: 44px; height: 44px; margin-inline: -3px; border: 0; background: transparent; color: #8a857c; font-size: 17px; }
 .record-card .pin.active { color: var(--tomato); }
 .record-delete { font-size: 18px; font-weight: 300; }
 .record-card > div { min-width: 0; padding-top: 3px; }
@@ -272,6 +272,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .ai-result { grid-template-columns: 1fr; }
   .ai-result footer { grid-column: auto; flex-wrap: wrap; }
   .quick-category { align-items: flex-start; flex-wrap: wrap; }
+}
+
+@media (max-width: 360px) {
+  .records-hero { align-items: flex-start; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+  .record-new { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

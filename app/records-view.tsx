@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { moveAndDeleteCategory, recordId, visibleRecords, type RecordItem, type RecordStore } from "./records";
+import { moveAndDeleteCategory, recordId, validCategoryName, visibleRecords, type RecordItem, type RecordStore } from "./records";
 
-type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; onNotice: (message: string) => void };
+type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; storageError: boolean; onNotice: (message: string) => void };
 
-export default function RecordsView({ store, setStore, onNotice }: Props) {
+export default function RecordsView({ store, setStore, storageError, onNotice }: Props) {
   const [categoryId, setCategoryId] = useState("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -14,20 +14,22 @@ export default function RecordsView({ store, setStore, onNotice }: Props) {
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState("");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
-  const [deleted, setDeleted] = useState<RecordItem | null>(null);
+  const [deleted, setDeleted] = useState<RecordItem[]>([]);
   const [consentOpen, setConsentOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiResult, setAiResult] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const records = useMemo(() => visibleRecords(store, categoryId, query), [store, categoryId, query]);
   const selected = store.records.find((item) => item.id === selectedId) ?? null;
 
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimers.current.forEach(clearTimeout);
   }, []);
+
+  useEffect(() => { if (storageError) setSaveState("error"); }, [storageError]);
 
   function createRecord() {
     const now = Date.now();
@@ -51,28 +53,37 @@ export default function RecordsView({ store, setStore, onNotice }: Props) {
   function deleteRecord(item: RecordItem) {
     setStore((current) => ({ ...current, records: current.records.filter((record) => record.id !== item.id) }));
     if (selectedId === item.id) setSelectedId(null);
-    setDeleted(item);
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    undoTimer.current = setTimeout(() => setDeleted(null), 5000);
+    setDeleted((current) => [...current, item]);
+    const timer = setTimeout(() => {
+      setDeleted((current) => current.filter((record) => record.id !== item.id));
+      undoTimers.current.delete(timer);
+    }, 5000);
+    undoTimers.current.add(timer);
   }
 
   function undoDelete() {
-    if (!deleted) return;
-    setStore((current) => ({ ...current, records: [deleted, ...current.records] }));
-    setDeleted(null);
+    const latest = deleted[deleted.length - 1];
+    if (!latest) return;
+    setStore((current) => ({ ...current, records: [latest, ...current.records] }));
+    setDeleted((current) => current.slice(0, -1));
   }
 
   function addCategory() {
-    const name = newCategory.trim().slice(0, 40);
-    if (!name || store.categories.some((item) => item.name === name)) return;
+    const name = validCategoryName(store.categories, newCategory);
+    if (!name) { onNotice(newCategory.trim() ? "分类名称不能重复" : "分类名称不能为空"); return; }
     setStore((current) => ({ ...current, categories: [...current.categories, { id: recordId(), name, createdAt: Date.now() }] }));
     setNewCategory("");
   }
 
   function renameCategory(id: string, name: string) {
-    const clean = name.trim().slice(0, 40);
-    if (!clean) return;
+    const clean = validCategoryName(store.categories, name, id);
+    const currentName = store.categories.find((item) => item.id === id)?.name;
+    if (!clean) {
+      onNotice(name.trim() ? "分类名称不能重复" : "分类名称不能为空");
+      return currentName || "";
+    }
     setStore((current) => ({ ...current, categories: current.categories.map((item) => item.id === id ? { ...item, name: clean } : item) }));
+    return clean;
   }
 
   function confirmDeleteCategory() {
@@ -136,21 +147,43 @@ export default function RecordsView({ store, setStore, onNotice }: Props) {
       </section>
     </div>
 
-    {categoriesOpen && <Dialog title="管理分类" onClose={() => setCategoriesOpen(false)}><div className="category-manager"><div className="category-add"><input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="新分类名称" maxLength={40} onKeyDown={(event) => event.key === "Enter" && addCategory()} /><button onClick={addCategory}>新增</button></div>{store.categories.map((category) => <div className="category-edit" key={category.id}><input defaultValue={category.name} onBlur={(event) => renameCategory(category.id, event.target.value)} /><button disabled={store.categories.length === 1} onClick={() => { setDeleteCategoryId(category.id); setMoveTarget(store.categories.find((item) => item.id !== category.id)?.id || ""); }}>删除</button></div>)}</div></Dialog>}
+    {categoriesOpen && <Dialog title="管理分类" onClose={() => setCategoriesOpen(false)}><div className="category-manager"><div className="category-add"><input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="新分类名称" maxLength={40} onKeyDown={(event) => event.key === "Enter" && addCategory()} /><button onClick={addCategory}>新增</button></div>{store.categories.map((category) => <CategoryEditor key={category.id} category={category} onRename={renameCategory} onDelete={() => { setCategoriesOpen(false); setDeleteCategoryId(category.id); setMoveTarget(store.categories.find((item) => item.id !== category.id)?.id || ""); }} deleteDisabled={store.categories.length === 1} />)}</div></Dialog>}
     {deleteCategoryId && <Dialog title="迁移并删除分类" onClose={() => setDeleteCategoryId(null)}><div className="category-delete-dialog"><p>先选择记录要迁移到的分类，再删除“{store.categories.find((item) => item.id === deleteCategoryId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>{store.categories.filter((item) => item.id !== deleteCategoryId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteCategoryId(null)}>取消</button><button className="danger" onClick={confirmDeleteCategory}>迁移并删除</button></footer></div></Dialog>}
     {consentOpen && <Dialog title="发送当前记录给 AI？" onClose={() => setConsentOpen(false)}><div className="ai-consent"><p>AI 整理会把当前这一条记录的正文发送给外部 AI 服务。不会读取其他记录或整个分类。</p><p>记录可能包含敏感信息，请确认内容适合发送。</p><footer><button onClick={() => setConsentOpen(false)}>取消</button><button className="primary" onClick={() => { setStore((current) => ({ ...current, aiConsent: true })); setConsentOpen(false); void requestOrganize(); }}>确认并整理</button></footer></div></Dialog>}
     {aiResult && <Dialog title="AI 整理结果" onClose={() => setAiResult("")}><div className="ai-result"><div><h3>原文</h3><pre>{selected?.body}</pre></div><div><h3>整理结果</h3><pre>{aiResult}</pre></div><footer><button onClick={() => setAiResult("")}>取消</button><button onClick={() => acceptAi("append")}>同时保留</button><button className="primary" onClick={() => acceptAi("replace")}>替换当前内容</button></footer></div></Dialog>}
-    {deleted && <div className="undo" role="status"><span>记录已删除</span><button onClick={undoDelete}>撤销</button></div>}
+    {deleted.length > 0 && <div className="undo" role="status"><span>已删除 {deleted.length} 条</span><button onClick={undoDelete}>撤销最近一条</button></div>}
   </div>;
 }
 
 function Dialog({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
   useEffect(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.classList.add("modal-open");
     box.current?.focus();
-    function onKey(event: KeyboardEvent) { if (event.key === "Escape") onClose(); }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") closeRef.current();
+      if (event.key === "Tab" && box.current) {
+        const focusable = [...box.current.querySelectorAll<HTMLElement>("button:not(:disabled), input, select, textarea")];
+        if (!focusable.length) return;
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("modal-open");
+      returnFocus?.focus();
+    };
+  }, []);
   return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal records-modal" ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}><button className="modal-close" onClick={onClose} aria-label="关闭">×</button><header><h2>{title}</h2></header>{children}</div></div>;
+}
+
+function CategoryEditor({ category, onRename, onDelete, deleteDisabled }: { category: { id: string; name: string }; onRename: (id: string, name: string) => string; onDelete: () => void; deleteDisabled: boolean }) {
+  const [name, setName] = useState(category.name);
+  return <div className="category-edit"><input value={name} onChange={(event) => setName(event.target.value)} onBlur={() => setName(onRename(category.id, name))} /><button disabled={deleteDisabled} onClick={onDelete}>删除</button></div>;
 }

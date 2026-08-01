@@ -97,6 +97,7 @@ function parseStore(raw: string): Store | null {
 export default function Home() {
   const [store, setStore] = useState<Store>(emptyStore);
   const [recordStore, setRecordStore] = useState<RecordStore>(emptyRecordStore);
+  const [recordStorageError, setRecordStorageError] = useState(false);
   const [activePage, setActivePage] = useState<"schedule" | "records">("schedule");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
@@ -135,8 +136,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!ready) return;
-    try { window.localStorage.setItem(RECORDS_KEY, JSON.stringify(recordStore)); }
-    catch { queueMicrotask(() => setNotice("记录保存失败，请清理浏览器空间后重试")); }
+    try { window.localStorage.setItem(RECORDS_KEY, JSON.stringify(recordStore)); setRecordStorageError(false); }
+    catch { setRecordStorageError(true); queueMicrotask(() => setNotice("记录保存失败，请清理浏览器空间后重试")); }
   }, [ready, recordStore]);
 
   useEffect(() => {
@@ -285,7 +286,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </section> : <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} onNotice={setNotice} /></section>}
+    </section> : <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} /></section>}
 
     {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
       <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />

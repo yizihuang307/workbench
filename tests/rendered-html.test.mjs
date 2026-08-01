@@ -50,3 +50,15 @@ test("AI organizer fails safely when the server key is absent", async () => {
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: "AI 服务尚未配置" });
 });
+
+test("AI organizer rejects malformed and empty input before checking configuration", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("invalid-organize", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const env = { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } };
+  const context = { waitUntil() {}, passThroughOnException() {} };
+  const malformed = await worker.fetch(new Request("http://localhost/api/organize", { method: "POST", headers: { "content-type": "application/json" }, body: "{" }), env, context);
+  assert.equal(malformed.status, 400);
+  const empty = await worker.fetch(new Request("http://localhost/api/organize", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: "   " }) }), env, context);
+  assert.equal(empty.status, 400);
+});
