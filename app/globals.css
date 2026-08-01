@@ -300,13 +300,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .category-bar > button { padding: 0 14px; }
 .category-tab { display: flex; }
 .category-tab > button { min-height: 42px; padding: 0 12px; border: 0; background: transparent; }
-.category-tab .category-new { width: 42px; padding: 0; border-left: 1px solid rgba(49,87,183,.25); color: var(--cobalt); font-size: 18px; }
 .category-bar > button.active, .category-tab.active { background: var(--cobalt); color: white; }
-.category-tab.active .category-new { color: white; border-color: rgba(255,255,255,.35); }
 .category-bar em { margin-left: 5px; font-size: 10px; font-style: normal; opacity: .72; }
 .category-bar .category-manage { margin-left: auto; border-color: var(--line); color: var(--cobalt); }
 .records-layout { min-height: 680px; grid-template-columns: minmax(320px,.72fr) minmax(440px,1.28fr); margin-top: 0; }
 .record-browser { border-right: 1px solid var(--ink); }
+.record-toolbar { display: grid; align-content: center; gap: 10px; padding-block: 12px; }
+.record-toolbar-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.record-toolbar-title > div { min-width: 0; }
+.record-create { min-height: 40px; padding: 0 12px; border: 1px solid var(--cobalt); background: var(--cobalt); color: white; white-space: nowrap; font-weight: 750; }
+.record-toolbar input { width: 100%; }
 .record-card { grid-template-columns: 38px minmax(0,1fr) 44px; }
 .record-card mark { padding: 0 1px; background: var(--lemon); color: inherit; }
 .record-actions { position: relative; padding: 0 !important; }
