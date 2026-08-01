@@ -340,7 +340,7 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
         onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.legacy && <em>昨日遗留</em>}</div>}
     </div>
-    {group === "today" && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
+    {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
     <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>···</button>
       {menuOpen && <div className="task-menu" role="menu">
         <button onClick={() => { setEditing(true); setMenuOpen(false); }}>编辑</button>
