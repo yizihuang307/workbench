@@ -172,7 +172,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     </div>
     <div className="records-layout">
       <section className="record-browser">
-        <div className="record-toolbar"><div className="record-toolbar-title"><div><h2>{title}</h2><span>共 {records.length} 项</span></div><button className="record-create" onClick={() => createRecord()}>＋ 新建记录</button></div><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索记录正文" aria-label="搜索记录正文" /></div>
+        <div className="record-toolbar"><div className="record-toolbar-title"><div><h2>{title}</h2><span>共 {records.length} 项</span></div><button className="record-create" onClick={() => createRecord()} aria-label="新建记录" title="新建记录">＋</button></div><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索记录正文" aria-label="搜索记录正文" /></div>
         <div className="record-list">
           {records.map((item) => { const lines = item.body.trim().split(/\n+/); const preview = lines.slice(1).join(" ") || lines[0] || "开始输入正文…"; return <article key={item.id} className={`record-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}>
             <button className={`pin ${item.pinned ? "active" : ""}`} onClick={(event) => { event.stopPropagation(); togglePinned(item); }} aria-label={item.pinned ? "取消置顶" : "置顶"} title={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
