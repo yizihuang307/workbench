@@ -84,7 +84,11 @@ test("record search fills its complete toolbar row", async () => {
 });
 
 test("record count and AI action share the editor header", async () => {
-  const view = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/records-view.tsx", import.meta.url), "utf8"));
-  assert.match(view, /<header><span className="editor-category">.*className="editor-count">.*className="ai-button"/s);
+  const [view, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/records-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(view, /<header><span className="editor-category">.*className="editor-count">.*className=\{`save-state.*className="ai-button"/s);
+  assert.match(css, /\.record-editor > header \.ai-button \{[^}]*min-height: 40px;[^}]*padding-inline: 12px/);
   assert.doesNotMatch(view, /<footer><span>\{selected\.body\.length\}/);
 });
