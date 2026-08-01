@@ -62,3 +62,15 @@ test("AI organizer rejects malformed and empty input before checking configurati
   const empty = await worker.fetch(new Request("http://localhost/api/organize", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: "   " }) }), env, context);
   assert.equal(empty.status, 400);
 });
+
+test("record move menu opens on hover and escapes the scrolling list", async () => {
+  const [view, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/records-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(view, /onMouseEnter=\{\(event\) => showMoveMenu/);
+  assert.match(view, /onFocus=\{\(event\) => showMoveMenu/);
+  assert.match(css, /\.record-menu \{[^}]*width: 88px/);
+  assert.match(css, /\.record-move-menu \{[^}]*position: fixed/);
+  assert.match(css, /\.record-move-menu \{[^}]*z-index: 100/);
+});

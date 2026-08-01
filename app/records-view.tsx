@@ -20,6 +20,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
   const [aiResults, setAiResults] = useState<Array<{ recordId: string; result: string }>>([]);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
+  const [moveMenuPosition, setMoveMenuPosition] = useState({ top: 0, left: 0 });
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
   const [editorEpoch, setEditorEpoch] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,6 +70,12 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     setMenuId(null);
     setMoveMenuId(null);
     onNotice("记录已移动");
+  }
+
+  function showMoveMenu(itemId: string, trigger: HTMLElement) {
+    const rect = trigger.getBoundingClientRect();
+    setMoveMenuPosition({ top: rect.top, left: rect.right + 2 });
+    setMoveMenuId(itemId);
   }
 
 
@@ -159,7 +166,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
           {records.map((item) => { const lines = item.body.trim().split(/\n+/); const preview = lines.slice(1).join(" ") || lines[0] || "开始输入正文…"; return <article key={item.id} className={`record-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}>
             <button className={`pin ${item.pinned ? "active" : ""}`} onClick={(event) => { event.stopPropagation(); togglePinned(item); }} aria-label={item.pinned ? "取消置顶" : "置顶"} title={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
             <div><strong>{highlight(lines[0] || "新记录", query)}</strong><p>{highlight(preview, query)}</p>{recordBlocks(item).filter((block) => block.type === "image").length ? <small>含 {recordBlocks(item).filter((block) => block.type === "image").length} 张图片 · </small> : null}<small>{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>
-            <div className="record-actions"><button className="record-more" onClick={(event) => { event.stopPropagation(); const opening = menuId !== item.id; setMenuId(opening ? item.id : null); setMoveMenuId(null); }} aria-label="记录操作" title="记录操作">···</button>{menuId === item.id && <div className="record-menu" onClick={(event) => event.stopPropagation()}><button className="move-trigger" onClick={() => setMoveMenuId(moveMenuId === item.id ? null : item.id)} aria-expanded={moveMenuId === item.id}>移动到 <span>›</span></button>{moveMenuId === item.id && <div className="record-move-menu">{store.categories.filter((category) => category.id !== item.categoryId).map((category) => <button key={category.id} onClick={() => moveRecord(item, category.id)}>{category.name}</button>)}</div>}<button className="danger" onClick={() => { setMenuId(null); setMoveMenuId(null); deleteRecord(item); }}>删除记录</button></div>}</div>
+            <div className="record-actions"><button className="record-more" onClick={(event) => { event.stopPropagation(); const opening = menuId !== item.id; setMenuId(opening ? item.id : null); setMoveMenuId(null); }} aria-label="记录操作" title="记录操作">···</button>{menuId === item.id && <div className="record-menu" onClick={(event) => event.stopPropagation()} onMouseLeave={() => setMoveMenuId(null)}><button className="move-trigger" onMouseEnter={(event) => showMoveMenu(item.id, event.currentTarget)} onFocus={(event) => showMoveMenu(item.id, event.currentTarget)} onClick={(event) => showMoveMenu(item.id, event.currentTarget)} aria-haspopup="menu" aria-expanded={moveMenuId === item.id}>移动到 <span>›</span></button>{moveMenuId === item.id && <div className="record-move-menu" role="menu" style={{ top: moveMenuPosition.top, left: moveMenuPosition.left }}>{store.categories.filter((category) => category.id !== item.categoryId).map((category) => <button role="menuitem" key={category.id} onClick={() => moveRecord(item, category.id)}>{category.name}</button>)}</div>}<button className="danger" onClick={() => { setMenuId(null); setMoveMenuId(null); deleteRecord(item); }}>删除记录</button></div>}</div>
           </article>; })}
           {!records.length && <div className="record-empty"><b>＋</b><p>{query ? "没有匹配的记录" : "这里还没有记录"}</p>{categoryId !== "all" && <button onClick={() => createRecord(categoryId)}>写下第一条</button>}</div>}
         </div>

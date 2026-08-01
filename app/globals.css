@@ -314,14 +314,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .record-card mark { padding: 0 1px; background: var(--lemon); color: inherit; }
 .record-actions { position: relative; padding: 0 !important; }
 .record-more { width: 44px; height: 44px; border: 0; background: transparent; color: #777168; font-size: 14px; letter-spacing: -1px; }
-.record-menu { position: absolute; z-index: 25; top: 36px; right: 0; width: 124px; display: grid; padding: 4px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 3px 3px 0 rgba(36,34,31,.13); }
+.record-menu { position: absolute; z-index: 25; top: 36px; right: 0; width: 88px; display: grid; padding: 3px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 2px 2px 0 rgba(36,34,31,.12); }
 .record-menu strong { padding: 5px 7px 3px; color: var(--muted); font-size: 10px; }
-.record-menu button { min-height: 34px; padding: 0 7px; border: 0; background: transparent; font-size: 12px; text-align: left; }
+.record-menu button { min-height: 30px; padding: 0 6px; border: 0; background: transparent; font-size: 12px; text-align: left; white-space: nowrap; }
 .record-menu button:hover { background: var(--sky); }
 .record-menu .danger { margin-top: 2px; border-top: 1px solid var(--line); color: #a43b2c; }
 .record-menu .move-trigger { display: flex; align-items: center; justify-content: space-between; }
-.record-menu .move-trigger span { font-size: 18px; }
-.record-move-menu { position: absolute; z-index: 26; top: 0; left: calc(100% + 2px); width: 124px; display: grid; padding: 4px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 3px 3px 0 rgba(36,34,31,.13); }
+.record-menu .move-trigger span { font-size: 15px; }
+.record-move-menu { position: fixed; z-index: 100; width: max-content; min-width: 88px; max-width: 180px; display: grid; padding: 3px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 2px 2px 0 rgba(36,34,31,.12); }
 .editor-category { padding: 6px 9px; border: 1px solid var(--line); color: #68635b; font-size: 12px; }
 .record-document-editor { min-height: 0; flex: 1; overflow: auto; padding: 24px; outline: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.8; }
 .record-document-editor:empty::before { color: #99948b; content: attr(data-placeholder); pointer-events: none; }
