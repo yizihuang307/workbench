@@ -1,5 +1,6 @@
 export type RecordCategory = { id: string; name: string; createdAt: number };
-export type RecordItem = { id: string; categoryId: string; body: string; pinned: boolean; createdAt: number; updatedAt: number };
+export type RecordImage = { id: string; dataUrl: string; name: string };
+export type RecordItem = { id: string; categoryId: string; body: string; images?: RecordImage[]; pinned: boolean; createdAt: number; updatedAt: number };
 export type RecordStore = { version: 1; categories: RecordCategory[]; records: RecordItem[]; defaultCategoryId: string; aiConsent: boolean };
 
 export const RECORDS_KEY = "workbench.records.v1";
@@ -40,6 +41,7 @@ export function parseRecordStore(raw: string): RecordStore | null {
       id: item.id,
       categoryId: categoryIds.has(item.categoryId) ? item.categoryId : fallback,
       body: item.body.slice(0, 30000),
+      images: Array.isArray(item.images) ? item.images.filter((image) => image && typeof image.id === "string" && typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/")).slice(0, 5).map((image) => ({ id: image.id, dataUrl: image.dataUrl, name: typeof image.name === "string" ? image.name.slice(0, 120) : "粘贴的图片" })) : [],
       pinned: Boolean(item.pinned),
       createdAt: Number(item.createdAt) || Date.now(),
       updatedAt: Number(item.updatedAt) || Date.now(),

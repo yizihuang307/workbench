@@ -66,6 +66,19 @@ test("1000 records filter and sort without losing results", () => {
   assert.equal(result[0].id, "9");
 });
 
+test("pasted images recover safely and are capped at five", () => {
+  const images = Array.from({ length: 7 }, (_, index) => ({ id: String(index), dataUrl: "data:image/png;base64,AA==", name: `图片${index}` }));
+  images[1] = { id: "bad", dataUrl: "javascript:alert(1)", name: "危险内容" };
+  const parsed = parseRecordStore(JSON.stringify({
+    categories: [{ id: "quick", name: "随手记", createdAt: 1 }],
+    records: [{ id: "r", categoryId: "quick", body: "正文", images, createdAt: 1, updatedAt: 1 }],
+    defaultCategoryId: "quick",
+  }));
+  assert.ok(parsed);
+  assert.equal(parsed.records[0].images?.length, 5);
+  assert.equal(parsed.records[0].images?.some((image) => image.dataUrl.startsWith("javascript:")), false);
+});
+
 test("category names reject blanks and duplicates and cap long input", () => {
   const store = emptyRecordStore(1);
   assert.equal(validCategoryName(store.categories, "   "), null);
