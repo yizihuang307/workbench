@@ -57,3 +57,20 @@ test("1000 resources remain searchable without loss", () => {
   assert.equal(visibleResources(store, "work", "关键字").length, 500);
   assert.equal(visibleResources(store, "work", "关键字")[0].id, "9");
 });
+
+test("legacy system section name migrates to 常用链接", () => {
+  const parsed = parseInfoStore(JSON.stringify({ version: 1, sections: [
+    { id: "systems", name: "常用系统", type: "systems", order: 0 },
+    { id: "work", name: "工作资料", type: "resources", order: 1 },
+  ], systems: [], resources: [] }));
+  assert.equal(parsed?.sections[0].name, "常用链接");
+});
+
+test("single-character accidental auto titles recover to the full first line", () => {
+  const parsed = parseInfoStore(JSON.stringify({ version: 1, sections: [
+    { id: "systems", name: "常用链接", type: "systems", order: 0 },
+    { id: "work", name: "工作资料", type: "resources", order: 1 },
+  ], systems: [], resources: [{ id: "r", sectionId: "work", title: "y", blocks: [{ id: "t", type: "text", text: "yes 完整标题\n正文" }], createdAt: 1, updatedAt: 1 }] }));
+  assert.equal(parsed?.resources[0].title, "yes 完整标题");
+  assert.equal(parsed?.resources[0].titleAuto, true);
+});

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordsView from "./records-view";
 import { emptyRecordStore, parseRecordStore, recordId, RECORDS_KEY, type RecordStore } from "./records";
 import InformationView from "./information-view";
-import { emptyInfoStore, INFO_KEY, parseInfoStore, type InfoStore } from "./information";
+import { emptyInfoStore, type InfoStore } from "./information";
+import { INFO_SYNC_KEY, loadInfoStore, migrateLegacyInfoStore, saveInfoStore } from "./information-storage";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -117,9 +118,10 @@ export default function Home() {
     const parsed = raw ? parseStore(raw) : null;
     const recordRaw = window.localStorage.getItem(RECORDS_KEY);
     const parsedRecords = recordRaw ? parseRecordStore(recordRaw) : null;
-    const infoRaw = window.localStorage.getItem(INFO_KEY);
-    const parsedInfo = infoRaw ? parseInfoStore(infoRaw) : null;
-    queueMicrotask(() => {
+    void (async () => {
+      let parsedInfo: InfoStore | null = null;
+      try { parsedInfo = await migrateLegacyInfoStore(); }
+      catch { setNotice("信息数据无法读取，已保留安全的空资料库"); }
       if (parsed) setStore(parsed);
       else if (raw) {
         setStore({ ...emptyStore(), tasks: { today: [], week: [], later: [] } });
@@ -128,9 +130,8 @@ export default function Home() {
       if (parsedRecords) setRecordStore(parsedRecords);
       else if (recordRaw) setNotice("记录数据无法读取，已保留安全的空记录库");
       if (parsedInfo) setInfoStore(parsedInfo);
-      else if (infoRaw) setNotice("信息数据无法读取，已保留安全的空资料库");
       setReady(true);
-    });
+    })();
   }, []);
 
   useEffect(() => {
@@ -150,8 +151,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!ready) return;
-    try { window.localStorage.setItem(INFO_KEY, JSON.stringify(infoStore)); queueMicrotask(() => setInfoStorageError(false)); }
-    catch { queueMicrotask(() => { setInfoStorageError(true); setNotice("信息保存失败，请清理浏览器空间后重试"); }); }
+    let active = true;
+    void saveInfoStore(infoStore).then(() => {
+      if (!active) return;
+      setInfoStorageError(false);
+      window.localStorage.setItem(INFO_SYNC_KEY, String(Date.now()));
+    }).catch(() => { if (active) { setInfoStorageError(true); setNotice("信息保存失败，请清理浏览器空间后重试"); } });
+    return () => { active = false; };
   }, [ready, infoStore]);
 
   useEffect(() => {
@@ -185,11 +191,9 @@ export default function Home() {
 
   useEffect(() => {
     function syncInfo(event: StorageEvent) {
-      if (event.key !== INFO_KEY || !event.newValue) return;
-      const parsed = parseInfoStore(event.newValue);
-      if (!parsed) return;
+      if (event.key !== INFO_SYNC_KEY || !event.newValue) return;
       if (activePage === "information" && document.hasFocus()) { setNotice("另一标签页修改了信息，请刷新确认，避免覆盖当前编辑"); return; }
-      setInfoStore(parsed); setNotice("已同步另一标签页的信息修改");
+      void loadInfoStore().then((parsed) => { if (parsed) { setInfoStore(parsed); setNotice("已同步另一标签页的信息修改"); } });
     }
     window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
   }, [activePage]);

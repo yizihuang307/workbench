@@ -6,7 +6,7 @@ export type TextBlock = { id: string; type: "text"; text: string };
 export type LinkBlock = { id: string; type: "link"; url: string; title: string; domain: string };
 export type FileBlock = { id: string; type: "file"; name: string; mime: string; size: number; dataUrl: string };
 export type InfoBlock = TextBlock | LinkBlock | FileBlock;
-export type ResourceItem = { id: string; sectionId: string; title: string; blocks: InfoBlock[]; pinned: boolean; createdAt: number; updatedAt: number };
+export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; blocks: InfoBlock[]; pinned: boolean; createdAt: number; updatedAt: number };
 export type InfoStore = { version: 1; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
 
 export const INFO_KEY = "workbench.information.v1";
@@ -17,7 +17,7 @@ export function infoId() { return `${Date.now().toString(36)}-${Math.random().to
 
 export function emptyInfoStore(now = Date.now()): InfoStore {
   return { version: 1, sections: [
-    { id: "systems", name: "常用系统", type: "systems", order: 0, createdAt: now },
+    { id: "systems", name: "常用链接", type: "systems", order: 0, createdAt: now },
     { id: "work", name: "工作资料", type: "resources", order: 1, createdAt: now + 1 },
     { id: "learning", name: "学习收藏", type: "resources", order: 2, createdAt: now + 2 },
   ], systems: [], resources: [] };
@@ -73,7 +73,7 @@ export function parseInfoStore(raw: string): InfoStore | null {
       const name = item.name.trim().slice(0, 40);
       if (!name || ids.has(item.id) || names.has(name)) return [];
       ids.add(item.id); names.add(name);
-      return [{ id: item.id, name, type: item.type, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now() }];
+      return [{ id: item.id, name: item.type === "systems" && name === "常用系统" ? "常用链接" : name, type: item.type, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now() }];
     });
     if (!sections.length) return null;
     const systemSection = sections.find((item) => item.type === "systems")?.id;
@@ -100,7 +100,10 @@ export function parseInfoStore(raw: string): InfoStore | null {
       }).slice(0, 40);
       if (!blocks.length) return [];
       seen.add(item.id);
-      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "resources") ? item.sectionId : resourceSection, title: typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 200) : deriveTitle(blocks), blocks, pinned: Boolean(item.pinned), createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
+      const derived = deriveTitle(blocks);
+      const rawTitle = typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 200) : derived;
+      const repairTruncatedAutoTitle = rawTitle.length === 1 && derived.length > 1 && derived.startsWith(rawTitle);
+      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "resources") ? item.sectionId : resourceSection, title: repairTruncatedAutoTitle ? derived : rawTitle, titleAuto: repairTruncatedAutoTitle || Boolean(item.titleAuto), blocks, pinned: Boolean(item.pinned), createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
     return { version: 1, sections: sections.sort((a, b) => a.order - b.order), systems, resources: totalFileBytes({ version: 1, sections, systems, resources }) <= TOTAL_FILE_LIMIT ? resources : resources.map((item) => ({ ...item, blocks: item.blocks.filter((block) => block.type !== "file") })) };
   } catch { return null; }
