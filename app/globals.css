@@ -127,6 +127,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .quick-category > span { font-weight: 700; }
 .quick-category select { min-height: 38px; padding: 0 30px 0 10px; border: 1px solid var(--line); background: white; }
 .quick-category label { display: flex; align-items: center; gap: 5px; }
+.quick-picker { position: relative; }
+.quick-picker-trigger { min-width: 130px; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 11px; border: 1px solid var(--line); background: white; color: var(--ink); text-align: left; }
+.quick-picker-trigger i { color: var(--muted); font-style: normal; }
+.quick-picker-menu { position: absolute; z-index: 40; top: calc(100% + 5px); right: 0; width: max(170px,100%); display: grid; padding: 6px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 rgba(36,34,31,.16); }
+.quick-picker-menu button { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.quick-picker-menu button:hover, .quick-picker-menu button.active { background: var(--sky); }
+.quick-picker-menu button.active { color: var(--cobalt); font-weight: 750; }
 .quick-note textarea { width: 100%; min-height: 250px; resize: vertical; padding: 16px; border: 1px solid var(--cobalt); background: #fffefa; line-height: 1.7; }
 .quick-note footer { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .quick-note footer span { margin-right: auto; color: #69645c; font-size: 12px; }
@@ -309,6 +316,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .record-menu button { min-height: 40px; padding: 0 9px; border: 0; background: transparent; text-align: left; }
 .record-menu button:hover { background: var(--sky); }
 .record-menu .danger { margin-top: 4px; border-top: 1px solid var(--line); color: #a43b2c; }
+.record-menu .move-trigger { display: flex; align-items: center; justify-content: space-between; }
+.record-menu .move-trigger span { font-size: 18px; }
+.record-move-menu { position: absolute; z-index: 26; top: 0; right: calc(100% + 7px); width: 150px; display: grid; padding: 6px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 rgba(36,34,31,.15); }
 .editor-category { padding: 6px 9px; border: 1px solid var(--line); color: #68635b; font-size: 12px; }
 .record-images { max-height: 230px; display: flex; gap: 10px; overflow: auto; padding: 12px 16px; border-top: 1px solid var(--line); }
 .record-images figure { position: relative; flex: 0 0 auto; width: 180px; height: 180px; margin: 0; border: 1px solid var(--line); background: #f3efe7; }
@@ -328,5 +338,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .quick-note h2 { font-size: 21px; }
   .quick-category { align-items: center; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
   .quick-category > span { display: none; }
-  .quick-category select { width: min(105px, 30vw); }
+  .quick-picker-trigger { min-width: 96px; max-width: 112px; }
+  .quick-picker-menu { right: auto; left: 0; }
 }
