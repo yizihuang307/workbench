@@ -13,6 +13,8 @@ export async function POST(request: Request) {
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({
         model: "deepseek/deepseek-v4-pro",
+        reasoning: { exclude: true },
+        max_tokens: 4096,
         messages: [
           { role: "system", content: "你是个人记录整理助手。保持事实和原意，不添加原文没有的信息。去除口语重复，按内容自然整理成清晰段落或要点。直接输出整理后的正文，不解释过程。" },
           { role: "user", content },
