@@ -74,3 +74,9 @@ test("record move menu opens on hover and escapes the scrolling list", async () 
   assert.match(css, /\.record-move-menu \{[^}]*position: fixed/);
   assert.match(css, /\.record-move-menu \{[^}]*z-index: 100/);
 });
+
+test("record search fills its complete toolbar row", async () => {
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /\.record-toolbar \{[^}]*grid-template-columns: minmax\(0,1fr\)/);
+  assert.match(css, /\.record-toolbar input \{ width: 100%/);
+});
