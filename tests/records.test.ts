@@ -90,6 +90,20 @@ test("AI result updates only the record that started the request", () => {
   assert.equal(next.records.find((item) => item.id === "b")?.body, "乙原文");
 });
 
+test("document blocks preserve image position and reject unsafe images", () => {
+  const parsed = parseRecordStore(JSON.stringify({
+    categories: [{ id: "quick", name: "随手记", createdAt: 1 }],
+    records: [{ id: "r", categoryId: "quick", body: "上下文", blocks: [
+      { type: "text", text: "图片上方\n" },
+      { type: "image", id: "safe", dataUrl: "data:image/png;base64,AA==", name: "截图" },
+      { type: "text", text: "\n图片下方" },
+      { type: "image", id: "bad", dataUrl: "javascript:alert(1)", name: "危险" },
+    ], createdAt: 1, updatedAt: 1 }], defaultCategoryId: "quick",
+  }));
+  assert.ok(parsed);
+  assert.deepEqual(parsed.records[0].blocks?.map((block) => block.type), ["text", "image", "text"]);
+});
+
 test("category names reject blanks and duplicates and cap long input", () => {
   const store = emptyRecordStore(1);
   assert.equal(validCategoryName(store.categories, "   "), null);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyAiResult, moveAndDeleteCategory, recordId, validCategoryName, visibleRecords, type RecordItem, type RecordStore } from "./records";
+import { applyAiResult, blocksText, moveAndDeleteCategory, recordBlocks, recordId, validCategoryName, visibleRecords, type RecordBlock, type RecordItem, type RecordStore } from "./records";
 
 type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -20,6 +20,8 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
   const [aiResults, setAiResults] = useState<Array<{ recordId: string; result: string }>>([]);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
+  const [editorEpoch, setEditorEpoch] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
@@ -45,15 +47,15 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
 
   function createRecord(targetCategoryId = categoryId === "all" ? store.defaultCategoryId : categoryId) {
     const now = Date.now();
-    const item = { id: recordId(), categoryId: targetCategoryId, body: "", images: [], pinned: false, createdAt: now, updatedAt: now };
+    const item = { id: recordId(), categoryId: targetCategoryId, body: "", blocks: [{ type: "text" as const, text: "" }], images: [], pinned: false, createdAt: now, updatedAt: now };
     setStore((current) => ({ ...current, records: [item, ...current.records] }));
     setSelectedId(item.id);
   }
 
-  function editBody(body: string) {
+  function editDocument(blocks: RecordBlock[]) {
     if (!selected) return;
     setSaveState("saving");
-    setStore((current) => ({ ...current, records: current.records.map((item) => item.id === selected.id ? { ...item, body: body.slice(0, 30000), updatedAt: Date.now() } : item) }));
+    setStore((current) => ({ ...current, records: current.records.map((item) => item.id === selected.id ? { ...item, body: blocksText(blocks).slice(0, 30000), blocks, images: [], updatedAt: Date.now() } : item) }));
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => setSaveState("saved"), 500);
   }
@@ -69,26 +71,6 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     onNotice("记录已移动");
   }
 
-  function pasteImages(files: File[]) {
-    if (!selected) return;
-    const available = 5 - (selected.images?.length || 0);
-    if (available <= 0) { onNotice("每条记录最多保存 5 张图片"); return; }
-    const accepted = files.filter((file) => file.type.startsWith("image/") && file.size <= 2 * 1024 * 1024).slice(0, available);
-    if (!accepted.length) { onNotice("图片需小于 2MB，且每条最多 5 张"); return; }
-    accepted.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result !== "string") return;
-        setStore((current) => ({ ...current, records: current.records.map((record) => record.id === selected.id ? { ...record, images: [...(record.images || []), { id: recordId(), dataUrl: reader.result as string, name: file.name || "粘贴的图片" }].slice(0, 5), updatedAt: Date.now() } : record) }));
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function removeImage(imageId: string) {
-    if (!selected) return;
-    setStore((current) => ({ ...current, records: current.records.map((record) => record.id === selected.id ? { ...record, images: (record.images || []).filter((image) => image.id !== imageId), updatedAt: Date.now() } : record) }));
-  }
 
   function deleteRecord(item: RecordItem) {
     setStore((current) => ({ ...current, records: current.records.filter((record) => record.id !== item.id) }));
@@ -159,7 +141,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     const activeResult = aiResults[0];
     if (!activeResult) return;
     setStore((current) => applyAiResult(current, activeResult.recordId, activeResult.result, mode));
-    if (selectedId === activeResult.recordId) setSaveState("saved");
+    if (selectedId === activeResult.recordId) { setSaveState("saved"); setEditorEpoch((value) => value + 1); }
     setAiResults((current) => current.slice(1));
   }
 
@@ -176,7 +158,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
         <div className="record-list">
           {records.map((item) => { const lines = item.body.trim().split(/\n+/); const preview = lines.slice(1).join(" ") || lines[0] || "开始输入正文…"; return <article key={item.id} className={`record-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}>
             <button className={`pin ${item.pinned ? "active" : ""}`} onClick={(event) => { event.stopPropagation(); togglePinned(item); }} aria-label={item.pinned ? "取消置顶" : "置顶"} title={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
-            <div><strong>{highlight(lines[0] || "新记录", query)}</strong><p>{highlight(preview, query)}</p>{item.images?.length ? <small>含 {item.images.length} 张图片 · </small> : null}<small>{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>
+            <div><strong>{highlight(lines[0] || "新记录", query)}</strong><p>{highlight(preview, query)}</p>{recordBlocks(item).filter((block) => block.type === "image").length ? <small>含 {recordBlocks(item).filter((block) => block.type === "image").length} 张图片 · </small> : null}<small>{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>
             <div className="record-actions"><button className="record-more" onClick={(event) => { event.stopPropagation(); const opening = menuId !== item.id; setMenuId(opening ? item.id : null); setMoveMenuId(null); }} aria-label="记录操作" title="记录操作">···</button>{menuId === item.id && <div className="record-menu" onClick={(event) => event.stopPropagation()}><button className="move-trigger" onClick={() => setMoveMenuId(moveMenuId === item.id ? null : item.id)} aria-expanded={moveMenuId === item.id}>移动到 <span>›</span></button>{moveMenuId === item.id && <div className="record-move-menu">{store.categories.filter((category) => category.id !== item.categoryId).map((category) => <button key={category.id} onClick={() => moveRecord(item, category.id)}>{category.name}</button>)}</div>}<button className="danger" onClick={() => { setMenuId(null); setMoveMenuId(null); deleteRecord(item); }}>删除记录</button></div>}</div>
           </article>; })}
           {!records.length && <div className="record-empty"><b>＋</b><p>{query ? "没有匹配的记录" : "这里还没有记录"}</p>{categoryId !== "all" && <button onClick={() => createRecord(categoryId)}>写下第一条</button>}</div>}
@@ -184,7 +166,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
       </section>
       <section className={`record-editor ${selected ? "open" : ""}`} aria-label="记录编辑器">
         {selected ? <><header><span className="editor-category">{store.categories.find((category) => category.id === selected.categoryId)?.name}</span><span className={`save-state ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="editor-close" onClick={() => setSelectedId(null)} aria-label="关闭编辑器" title="关闭">×</button></header>
-          <div className="record-document"><textarea autoFocus value={selected.body} style={{ height: `${Math.max(180, selected.body.split("\n").length * 27 + 72)}px` }} onChange={(event) => editBody(event.target.value)} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("image/"))) { event.preventDefault(); pasteImages(files); } }} placeholder="直接写正文，可粘贴图片，不需要标题…" maxLength={30000} />{!!selected.images?.length && <div className="record-images">{selected.images.map((image) => <figure key={image.id}><img src={image.dataUrl} alt={image.name} /><button onClick={() => removeImage(image.id)} aria-label={`删除图片${image.name}`}>×</button></figure>)}</div>}</div>
+          <DocumentEditor key={`${selected.id}-${editorEpoch}`} record={selected} onChange={editDocument} onNotice={onNotice} onPreview={setPreviewImage} />
           <footer><span>{selected.body.length} / 30000</span><button className="ai-button" disabled={aiBusyIds.includes(selected.id) || !selected.body.trim()} onClick={organize}>{aiBusyIds.includes(selected.id) ? "正在整理…" : "AI 整理"}</button></footer></> : <div className="editor-placeholder"><b>记</b><p>选择一条记录继续编辑</p><span>内容会自动保存</span></div>}
       </section>
     </div>
@@ -193,8 +175,144 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     {deleteCategoryId && <Dialog title="迁移并删除分类" onClose={() => setDeleteCategoryId(null)}><div className="category-delete-dialog"><p>先选择记录要迁移到的分类，再删除“{store.categories.find((item) => item.id === deleteCategoryId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>{store.categories.filter((item) => item.id !== deleteCategoryId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteCategoryId(null)}>取消</button><button className="danger" onClick={confirmDeleteCategory}>迁移并删除</button></footer></div></Dialog>}
     {consentRecordId && <Dialog title="发送当前记录给 AI？" onClose={() => setConsentRecordId(null)}><div className="ai-consent"><p>AI 整理会把当前这一条记录的正文发送给外部 AI 服务。不会读取其他记录或整个分类。</p><p>记录可能包含敏感信息，请确认内容适合发送。</p><footer><button onClick={() => setConsentRecordId(null)}>取消</button><button className="primary" onClick={() => { const recordId = consentRecordId; setStore((current) => ({ ...current, aiConsent: true })); setConsentRecordId(null); void requestOrganize(recordId); }}>确认并整理</button></footer></div></Dialog>}
     {aiResults[0] && <Dialog title="AI 整理结果" onClose={() => setAiResults((current) => current.slice(1))}><div className="ai-result"><div><h3>原文</h3><pre>{store.records.find((record) => record.id === aiResults[0].recordId)?.body}</pre></div><div><h3>整理结果</h3><pre>{aiResults[0].result}</pre></div><footer><button onClick={() => setAiResults((current) => current.slice(1))}>取消</button><button onClick={() => acceptAi("append")}>同时保留</button><button className="primary" onClick={() => acceptAi("replace")}>替换当前内容</button></footer></div></Dialog>}
+    {previewImage && <Dialog title={previewImage.name || "图片预览"} onClose={() => setPreviewImage(null)}><div className="image-preview"><img src={previewImage.src} alt={previewImage.name} /></div></Dialog>}
     {deleted.length > 0 && <div className="undo" role="status"><span>已删除 {deleted.length} 条</span><button onClick={undoDelete}>撤销最近一条</button></div>}
   </div>;
+}
+
+function DocumentEditor({ record, onChange, onNotice, onPreview }: { record: RecordItem; onChange: (blocks: RecordBlock[]) => void; onNotice: (message: string) => void; onPreview: (image: { src: string; name: string }) => void }) {
+  const editor = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = editor.current;
+    if (!root) return;
+    root.replaceChildren();
+    for (const block of recordBlocks(record)) {
+      if (block.type === "text") root.append(document.createTextNode(block.text));
+      else root.append(makeImage(block));
+    }
+    root.focus();
+  }, [record.id]);
+
+  function emit() {
+    if (editor.current) onChange(readBlocks(editor.current));
+  }
+
+  async function paste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const imageFiles = [...event.clipboardData.files].filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) {
+      const remaining = Math.max(0, 30000 - (editor.current?.innerText.length || 0));
+      document.execCommand("insertText", false, event.clipboardData.getData("text/plain").slice(0, remaining));
+      emit();
+      return;
+    }
+    const currentCount = editor.current?.querySelectorAll("img[data-record-image-id]").length || 0;
+    const accepted = imageFiles.filter((file) => file.size <= 2 * 1024 * 1024).slice(0, 5 - currentCount);
+    if (!accepted.length) { onNotice("图片需小于 2MB，且每条最多 5 张"); return; }
+    let range = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0).cloneRange() : null;
+    for (const file of accepted) {
+      const dataUrl = await fileDataUrl(file);
+      const image = makeImage({ id: recordId(), dataUrl, name: file.name || "粘贴的图片" });
+      range = insertAtRange(editor.current!, range, image);
+    }
+    emit();
+  }
+
+  function keyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const chosen = editor.current?.querySelector<HTMLImageElement>("img.record-inline-image.selected");
+    if ((event.key === "Backspace" || event.key === "Delete") && chosen) {
+      event.preventDefault();
+      chosen.remove();
+      emit();
+    }
+  }
+
+  function click(event: React.MouseEvent<HTMLDivElement>) {
+    const image = event.target instanceof HTMLImageElement ? event.target : null;
+    editor.current?.querySelectorAll("img.selected").forEach((node) => node.classList.remove("selected"));
+    if (!image?.matches("img[data-record-image-id]")) return;
+    image.classList.add("selected");
+    onPreview({ src: image.src, name: image.alt });
+  }
+
+  function dragStart(event: React.DragEvent<HTMLDivElement>) {
+    const image = event.target instanceof HTMLImageElement ? event.target : null;
+    if (!image?.dataset.recordImageId) return;
+    event.dataTransfer.setData("text/x-record-image", image.dataset.recordImageId);
+    event.dataTransfer.effectAllowed = "move";
+  }
+
+  function drop(event: React.DragEvent<HTMLDivElement>) {
+    const id = event.dataTransfer.getData("text/x-record-image");
+    if (!id || !editor.current) return;
+    event.preventDefault();
+    const image = editor.current.querySelector<HTMLImageElement>(`img[data-record-image-id="${CSS.escape(id)}"]`);
+    if (!image) return;
+    const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const range = document.createRange();
+    if (caret) range.setStart(caret.offsetNode, caret.offset); else range.selectNodeContents(editor.current);
+    range.collapse(false);
+    image.remove();
+    range.insertNode(image);
+    emit();
+  }
+
+  return <div className="record-document-editor" ref={editor} contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="记录正文，可粘贴和拖动图片" data-placeholder="直接写正文，可粘贴图片，不需要标题…" onInput={emit} onPaste={paste} onKeyDown={keyDown} onClick={click} onDragStart={dragStart} onDragOver={(event) => event.preventDefault()} onDrop={drop} />;
+}
+
+function makeImage(image: { id: string; dataUrl: string; name: string }) {
+  const node = document.createElement("img");
+  node.src = image.dataUrl;
+  node.alt = image.name;
+  node.dataset.recordImageId = image.id;
+  node.className = "record-inline-image";
+  node.draggable = true;
+  node.title = "拖动调整位置；选中后按 Delete 删除";
+  return node;
+}
+
+function readBlocks(root: HTMLElement): RecordBlock[] {
+  const blocks: RecordBlock[] = [];
+  function text(value: string) {
+    if (!value) return;
+    const last = blocks[blocks.length - 1];
+    if (last?.type === "text") last.text += value; else blocks.push({ type: "text", text: value });
+  }
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) { text(node.textContent || ""); return; }
+    if (node instanceof HTMLImageElement && node.dataset.recordImageId && node.src.startsWith("data:image/")) {
+      blocks.push({ type: "image", id: node.dataset.recordImageId, dataUrl: node.src, name: node.alt || "粘贴的图片" }); return;
+    }
+    if (node instanceof HTMLBRElement) { text("\n"); return; }
+    const element = node instanceof HTMLElement ? node : null;
+    [...node.childNodes].forEach(walk);
+    if (element && (element.tagName === "DIV" || element.tagName === "P") && node !== root) text("\n");
+  }
+  [...root.childNodes].forEach(walk);
+  return blocks.length ? blocks : [{ type: "text", text: "" }];
+}
+
+function fileDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("图片读取失败"));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function insertAtRange(root: HTMLElement, source: Range | null, node: Node) {
+  const range = source || document.createRange();
+  if (!source) { range.selectNodeContents(root); range.collapse(false); }
+  range.deleteContents();
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  return range.cloneRange();
 }
 
 function highlight(text: string, query: string) {

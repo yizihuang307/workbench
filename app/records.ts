@@ -1,6 +1,7 @@
 export type RecordCategory = { id: string; name: string; createdAt: number };
 export type RecordImage = { id: string; dataUrl: string; name: string };
-export type RecordItem = { id: string; categoryId: string; body: string; images?: RecordImage[]; pinned: boolean; createdAt: number; updatedAt: number };
+export type RecordBlock = { type: "text"; text: string } | ({ type: "image" } & RecordImage);
+export type RecordItem = { id: string; categoryId: string; body: string; blocks?: RecordBlock[]; images?: RecordImage[]; pinned: boolean; createdAt: number; updatedAt: number };
 export type RecordStore = { version: 1; categories: RecordCategory[]; records: RecordItem[]; defaultCategoryId: string; aiConsent: boolean };
 
 export const RECORDS_KEY = "workbench.records.v1";
@@ -37,15 +38,23 @@ export function parseRecordStore(raw: string): RecordStore | null {
       if (!item || typeof item.id !== "string" || typeof item.body !== "string" || seenRecordIds.has(item.id)) return false;
       seenRecordIds.add(item.id);
       return true;
-    }).map((item) => ({
+    }).map((item) => {
+      const images = Array.isArray(item.images) ? item.images.filter(validImage).slice(0, 5).map(cleanImage) : [];
+      const blocks = Array.isArray(item.blocks) ? item.blocks.flatMap((block): RecordBlock[] => {
+        if (block?.type === "text" && typeof block.text === "string") return [{ type: "text", text: block.text.slice(0, 30000) }];
+        if (block?.type === "image" && validImage(block)) return [{ type: "image", ...cleanImage(block) }];
+        return [];
+      }).slice(0, 100) : undefined;
+      return {
       id: item.id,
       categoryId: categoryIds.has(item.categoryId) ? item.categoryId : fallback,
       body: item.body.slice(0, 30000),
-      images: Array.isArray(item.images) ? item.images.filter((image) => image && typeof image.id === "string" && typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/")).slice(0, 5).map((image) => ({ id: image.id, dataUrl: image.dataUrl, name: typeof image.name === "string" ? image.name.slice(0, 120) : "粘贴的图片" })) : [],
+      blocks,
+      images,
       pinned: Boolean(item.pinned),
       createdAt: Number(item.createdAt) || Date.now(),
       updatedAt: Number(item.updatedAt) || Date.now(),
-    }));
+    }; });
     return { version: 1, categories, records, defaultCategoryId: fallback, aiConsent: Boolean(value.aiConsent) };
   } catch {
     return null;
@@ -75,5 +84,30 @@ export function moveAndDeleteCategory(store: RecordStore, fromId: string, toId: 
 }
 
 export function applyAiResult(store: RecordStore, recordId: string, result: string, mode: "replace" | "append", now = Date.now()): RecordStore {
-  return { ...store, records: store.records.map((record) => record.id === recordId ? { ...record, body: (mode === "replace" ? result : `${record.body.trim()}\n\n—— AI 整理结果 ——\n${result}`).slice(0, 30000), updatedAt: now } : record) };
+  return { ...store, records: store.records.map((record) => {
+    if (record.id !== recordId) return record;
+    const currentBlocks = recordBlocks(record);
+    const nextBlocks: RecordBlock[] = mode === "replace"
+      ? [{ type: "text", text: result }, ...currentBlocks.filter((block) => block.type === "image")]
+      : [...currentBlocks, { type: "text", text: `\n\n—— AI 整理结果 ——\n${result}` }];
+    return { ...record, body: blocksText(nextBlocks).slice(0, 30000), blocks: nextBlocks, images: [], updatedAt: now };
+  }) };
+}
+
+export function recordBlocks(record: RecordItem): RecordBlock[] {
+  if (record.blocks?.length) return record.blocks;
+  return [{ type: "text", text: record.body }, ...(record.images || []).map((image): RecordBlock => ({ type: "image", ...image }))];
+}
+
+export function blocksText(blocks: RecordBlock[]) {
+  return blocks.filter((block): block is Extract<RecordBlock, { type: "text" }> => block.type === "text").map((block) => block.text).join("");
+}
+
+function validImage(image: unknown): image is RecordImage {
+  const value = image as Partial<RecordImage> | null;
+  return Boolean(value && typeof value.id === "string" && typeof value.dataUrl === "string" && value.dataUrl.startsWith("data:image/"));
+}
+
+function cleanImage(image: RecordImage): RecordImage {
+  return { id: image.id, dataUrl: image.dataUrl, name: typeof image.name === "string" ? image.name.slice(0, 120) : "粘贴的图片" };
 }
