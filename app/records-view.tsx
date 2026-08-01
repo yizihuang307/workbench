@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { moveAndDeleteCategory, recordId, validCategoryName, visibleRecords, type RecordItem, type RecordStore } from "./records";
+import { applyAiResult, moveAndDeleteCategory, recordId, validCategoryName, visibleRecords, type RecordItem, type RecordStore } from "./records";
 
 type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -15,9 +15,9 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
   const [moveTarget, setMoveTarget] = useState("");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [deleted, setDeleted] = useState<RecordItem[]>([]);
-  const [consentOpen, setConsentOpen] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiResult, setAiResult] = useState("");
+  const [consentRecordId, setConsentRecordId] = useState<string | null>(null);
+  const [aiBusyIds, setAiBusyIds] = useState<string[]>([]);
+  const [aiResults, setAiResults] = useState<Array<{ recordId: string; result: string }>>([]);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -135,28 +135,32 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     onNotice("分类已迁移并删除");
   }
 
-  async function requestOrganize() {
-    if (!selected?.body.trim()) return;
-    setAiBusy(true);
+  async function requestOrganize(recordId: string) {
+    const record = store.records.find((item) => item.id === recordId);
+    if (!record?.body.trim() || aiBusyIds.includes(recordId)) return;
+    setAiBusyIds((current) => [...current, recordId]);
     try {
-      const response = await fetch("/api/organize", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: selected.body }) });
+      const response = await fetch("/api/organize", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: record.body }) });
       const data = await response.json() as { result?: string; error?: string };
       if (!response.ok || !data.result) throw new Error(data.error || "AI 整理失败");
-      setAiResult(data.result);
+      setAiResults((current) => [...current.filter((item) => item.recordId !== recordId), { recordId, result: data.result! }]);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "AI 整理失败，请稍后重试");
-    } finally { setAiBusy(false); }
+    } finally { setAiBusyIds((current) => current.filter((id) => id !== recordId)); }
   }
 
   function organize() {
-    if (!store.aiConsent) { setConsentOpen(true); return; }
-    void requestOrganize();
+    if (!selected) return;
+    if (!store.aiConsent) { setConsentRecordId(selected.id); return; }
+    void requestOrganize(selected.id);
   }
 
   function acceptAi(mode: "replace" | "append") {
-    if (!selected || !aiResult) return;
-    editBody(mode === "replace" ? aiResult : `${selected.body.trim()}\n\n—— AI 整理结果 ——\n${aiResult}`);
-    setAiResult("");
+    const activeResult = aiResults[0];
+    if (!activeResult) return;
+    setStore((current) => applyAiResult(current, activeResult.recordId, activeResult.result, mode));
+    if (selectedId === activeResult.recordId) setSaveState("saved");
+    setAiResults((current) => current.slice(1));
   }
 
   const title = categoryId === "all" ? "全部记录" : store.categories.find((item) => item.id === categoryId)?.name || "全部记录";
@@ -180,16 +184,15 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
       </section>
       <section className={`record-editor ${selected ? "open" : ""}`} aria-label="记录编辑器">
         {selected ? <><header><span className="editor-category">{store.categories.find((category) => category.id === selected.categoryId)?.name}</span><span className={`save-state ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="editor-close" onClick={() => setSelectedId(null)} aria-label="关闭编辑器" title="关闭">×</button></header>
-          <textarea autoFocus value={selected.body} onChange={(event) => editBody(event.target.value)} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("image/"))) { event.preventDefault(); pasteImages(files); } }} placeholder="直接写正文，可粘贴图片，不需要标题…" maxLength={30000} />
-          {!!selected.images?.length && <div className="record-images">{selected.images.map((image) => <figure key={image.id}><img src={image.dataUrl} alt={image.name} /><button onClick={() => removeImage(image.id)} aria-label={`删除图片${image.name}`}>×</button></figure>)}</div>}
-          <footer><span>{selected.body.length} / 30000</span><button className="ai-button" disabled={aiBusy || !selected.body.trim()} onClick={organize}>{aiBusy ? "正在整理…" : "AI 整理"}</button></footer></> : <div className="editor-placeholder"><b>记</b><p>选择一条记录继续编辑</p><span>内容会自动保存</span></div>}
+          <div className="record-document"><textarea autoFocus value={selected.body} style={{ height: `${Math.max(180, selected.body.split("\n").length * 27 + 72)}px` }} onChange={(event) => editBody(event.target.value)} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("image/"))) { event.preventDefault(); pasteImages(files); } }} placeholder="直接写正文，可粘贴图片，不需要标题…" maxLength={30000} />{!!selected.images?.length && <div className="record-images">{selected.images.map((image) => <figure key={image.id}><img src={image.dataUrl} alt={image.name} /><button onClick={() => removeImage(image.id)} aria-label={`删除图片${image.name}`}>×</button></figure>)}</div>}</div>
+          <footer><span>{selected.body.length} / 30000</span><button className="ai-button" disabled={aiBusyIds.includes(selected.id) || !selected.body.trim()} onClick={organize}>{aiBusyIds.includes(selected.id) ? "正在整理…" : "AI 整理"}</button></footer></> : <div className="editor-placeholder"><b>记</b><p>选择一条记录继续编辑</p><span>内容会自动保存</span></div>}
       </section>
     </div>
 
     {categoriesOpen && <Dialog title="管理分类" onClose={() => setCategoriesOpen(false)}><div className="category-manager"><div className="category-add"><input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="新分类名称" maxLength={40} onKeyDown={(event) => event.key === "Enter" && addCategory()} /><button onClick={addCategory}>新增</button></div>{store.categories.map((category) => <CategoryEditor key={category.id} category={category} onRename={renameCategory} onDelete={() => { setCategoriesOpen(false); setDeleteCategoryId(category.id); setMoveTarget(store.categories.find((item) => item.id !== category.id)?.id || ""); }} deleteDisabled={store.categories.length === 1} />)}</div></Dialog>}
     {deleteCategoryId && <Dialog title="迁移并删除分类" onClose={() => setDeleteCategoryId(null)}><div className="category-delete-dialog"><p>先选择记录要迁移到的分类，再删除“{store.categories.find((item) => item.id === deleteCategoryId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>{store.categories.filter((item) => item.id !== deleteCategoryId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteCategoryId(null)}>取消</button><button className="danger" onClick={confirmDeleteCategory}>迁移并删除</button></footer></div></Dialog>}
-    {consentOpen && <Dialog title="发送当前记录给 AI？" onClose={() => setConsentOpen(false)}><div className="ai-consent"><p>AI 整理会把当前这一条记录的正文发送给外部 AI 服务。不会读取其他记录或整个分类。</p><p>记录可能包含敏感信息，请确认内容适合发送。</p><footer><button onClick={() => setConsentOpen(false)}>取消</button><button className="primary" onClick={() => { setStore((current) => ({ ...current, aiConsent: true })); setConsentOpen(false); void requestOrganize(); }}>确认并整理</button></footer></div></Dialog>}
-    {aiResult && <Dialog title="AI 整理结果" onClose={() => setAiResult("")}><div className="ai-result"><div><h3>原文</h3><pre>{selected?.body}</pre></div><div><h3>整理结果</h3><pre>{aiResult}</pre></div><footer><button onClick={() => setAiResult("")}>取消</button><button onClick={() => acceptAi("append")}>同时保留</button><button className="primary" onClick={() => acceptAi("replace")}>替换当前内容</button></footer></div></Dialog>}
+    {consentRecordId && <Dialog title="发送当前记录给 AI？" onClose={() => setConsentRecordId(null)}><div className="ai-consent"><p>AI 整理会把当前这一条记录的正文发送给外部 AI 服务。不会读取其他记录或整个分类。</p><p>记录可能包含敏感信息，请确认内容适合发送。</p><footer><button onClick={() => setConsentRecordId(null)}>取消</button><button className="primary" onClick={() => { const recordId = consentRecordId; setStore((current) => ({ ...current, aiConsent: true })); setConsentRecordId(null); void requestOrganize(recordId); }}>确认并整理</button></footer></div></Dialog>}
+    {aiResults[0] && <Dialog title="AI 整理结果" onClose={() => setAiResults((current) => current.slice(1))}><div className="ai-result"><div><h3>原文</h3><pre>{store.records.find((record) => record.id === aiResults[0].recordId)?.body}</pre></div><div><h3>整理结果</h3><pre>{aiResults[0].result}</pre></div><footer><button onClick={() => setAiResults((current) => current.slice(1))}>取消</button><button onClick={() => acceptAi("append")}>同时保留</button><button className="primary" onClick={() => acceptAi("replace")}>替换当前内容</button></footer></div></Dialog>}
     {deleted.length > 0 && <div className="undo" role="status"><span>已删除 {deleted.length} 条</span><button onClick={undoDelete}>撤销最近一条</button></div>}
   </div>;
 }

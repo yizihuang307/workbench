@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyRecordStore, moveAndDeleteCategory, parseRecordStore, validCategoryName, visibleRecords } from "../app/records";
+import { applyAiResult, emptyRecordStore, moveAndDeleteCategory, parseRecordStore, validCategoryName, visibleRecords } from "../app/records";
 
 test("pinned records stay first and otherwise sort by update time", () => {
   const store = emptyRecordStore(1);
@@ -77,6 +77,17 @@ test("pasted images recover safely and are capped at five", () => {
   assert.ok(parsed);
   assert.equal(parsed.records[0].images?.length, 5);
   assert.equal(parsed.records[0].images?.some((image) => image.dataUrl.startsWith("javascript:")), false);
+});
+
+test("AI result updates only the record that started the request", () => {
+  const store = emptyRecordStore(1);
+  store.records = [
+    { id: "a", categoryId: "quick", body: "甲原文", pinned: false, createdAt: 1, updatedAt: 1 },
+    { id: "b", categoryId: "quick", body: "乙原文", pinned: false, createdAt: 2, updatedAt: 2 },
+  ];
+  const next = applyAiResult(store, "a", "甲整理", "replace", 3);
+  assert.equal(next.records.find((item) => item.id === "a")?.body, "甲整理");
+  assert.equal(next.records.find((item) => item.id === "b")?.body, "乙原文");
 });
 
 test("category names reject blanks and duplicates and cap long input", () => {

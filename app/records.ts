@@ -73,3 +73,7 @@ export function moveAndDeleteCategory(store: RecordStore, fromId: string, toId: 
     defaultCategoryId: store.defaultCategoryId === fromId ? toId : store.defaultCategoryId,
   };
 }
+
+export function applyAiResult(store: RecordStore, recordId: string, result: string, mode: "replace" | "append", now = Date.now()): RecordStore {
+  return { ...store, records: store.records.map((record) => record.id === recordId ? { ...record, body: (mode === "replace" ? result : `${record.body.trim()}\n\n—— AI 整理结果 ——\n${result}`).slice(0, 30000), updatedAt: now } : record) };
+}
