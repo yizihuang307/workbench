@@ -28,13 +28,13 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
 
   const records = useMemo(() => visibleRecords(store, categoryId, query), [store, categoryId, query]);
   const selected = store.records.find((item) => item.id === selectedId) ?? null;
+  const visibleSaveState = storageError ? "error" : saveState;
 
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     undoTimers.current.forEach(clearTimeout);
   }, []);
 
-  useEffect(() => { if (storageError) setSaveState("error"); }, [storageError]);
 
   useEffect(() => {
     function closeMenu(event: MouseEvent) {
@@ -172,7 +172,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
         </div>
       </section>
       <section className={`record-editor ${selected ? "open" : ""}`} aria-label="记录编辑器">
-        {selected ? <><header><span className="editor-category">{store.categories.find((category) => category.id === selected.categoryId)?.name}</span><span className="editor-count">{selected.body.length} / 30000</span><span className={`save-state ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="ai-button" disabled={aiBusyIds.includes(selected.id) || !selected.body.trim()} onClick={organize}><span>{aiBusyIds.includes(selected.id) ? "正在整理…" : "AI 整理"}</span></button><button className="editor-close" onClick={() => setSelectedId(null)} aria-label="关闭编辑器" title="关闭">×</button></header>
+        {selected ? <><header><span className="editor-category">{store.categories.find((category) => category.id === selected.categoryId)?.name}</span><span className="editor-count">{selected.body.length} / 30000</span><span className={`save-state ${visibleSaveState}`}>{visibleSaveState === "saving" ? "保存中…" : visibleSaveState === "error" ? "保存失败" : "已保存"}</span><button className="ai-button" disabled={aiBusyIds.includes(selected.id) || !selected.body.trim()} onClick={organize}><span>{aiBusyIds.includes(selected.id) ? "正在整理…" : "AI 整理"}</span></button><button className="editor-close" onClick={() => setSelectedId(null)} aria-label="关闭编辑器" title="关闭">×</button></header>
           <DocumentEditor key={`${selected.id}-${editorEpoch}`} record={selected} onChange={editDocument} onNotice={onNotice} onPreview={setPreviewImage} /></> : <div className="editor-placeholder"><b>记</b><p>选择一条记录继续编辑</p><span>内容会自动保存</span></div>}
       </section>
     </div>

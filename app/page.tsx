@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordsView from "./records-view";
 import { emptyRecordStore, parseRecordStore, recordId, RECORDS_KEY, type RecordStore } from "./records";
+import InformationView from "./information-view";
+import { emptyInfoStore, INFO_KEY, parseInfoStore, type InfoStore } from "./information";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -98,7 +100,9 @@ export default function Home() {
   const [store, setStore] = useState<Store>(emptyStore);
   const [recordStore, setRecordStore] = useState<RecordStore>(emptyRecordStore);
   const [recordStorageError, setRecordStorageError] = useState(false);
-  const [activePage, setActivePage] = useState<"schedule" | "records">("schedule");
+  const [infoStore, setInfoStore] = useState<InfoStore>(emptyInfoStore);
+  const [infoStorageError, setInfoStorageError] = useState(false);
+  const [activePage, setActivePage] = useState<"schedule" | "records" | "information">("schedule");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Group | null>(null);
@@ -113,6 +117,8 @@ export default function Home() {
     const parsed = raw ? parseStore(raw) : null;
     const recordRaw = window.localStorage.getItem(RECORDS_KEY);
     const parsedRecords = recordRaw ? parseRecordStore(recordRaw) : null;
+    const infoRaw = window.localStorage.getItem(INFO_KEY);
+    const parsedInfo = infoRaw ? parseInfoStore(infoRaw) : null;
     queueMicrotask(() => {
       if (parsed) setStore(parsed);
       else if (raw) {
@@ -121,6 +127,8 @@ export default function Home() {
       }
       if (parsedRecords) setRecordStore(parsedRecords);
       else if (recordRaw) setNotice("记录数据无法读取，已保留安全的空记录库");
+      if (parsedInfo) setInfoStore(parsedInfo);
+      else if (infoRaw) setNotice("信息数据无法读取，已保留安全的空资料库");
       setReady(true);
     });
   }, []);
@@ -136,9 +144,15 @@ export default function Home() {
 
   useEffect(() => {
     if (!ready) return;
-    try { window.localStorage.setItem(RECORDS_KEY, JSON.stringify(recordStore)); setRecordStorageError(false); }
-    catch { setRecordStorageError(true); queueMicrotask(() => setNotice("记录保存失败，请清理浏览器空间后重试")); }
+    try { window.localStorage.setItem(RECORDS_KEY, JSON.stringify(recordStore)); queueMicrotask(() => setRecordStorageError(false)); }
+    catch { queueMicrotask(() => { setRecordStorageError(true); setNotice("记录保存失败，请清理浏览器空间后重试"); }); }
   }, [ready, recordStore]);
+
+  useEffect(() => {
+    if (!ready) return;
+    try { window.localStorage.setItem(INFO_KEY, JSON.stringify(infoStore)); queueMicrotask(() => setInfoStorageError(false)); }
+    catch { queueMicrotask(() => { setInfoStorageError(true); setNotice("信息保存失败，请清理浏览器空间后重试"); }); }
+  }, [ready, infoStore]);
 
   useEffect(() => {
     function sync(event: StorageEvent) {
@@ -167,6 +181,17 @@ export default function Home() {
     }
     window.addEventListener("storage", syncRecords);
     return () => window.removeEventListener("storage", syncRecords);
+  }, [activePage]);
+
+  useEffect(() => {
+    function syncInfo(event: StorageEvent) {
+      if (event.key !== INFO_KEY || !event.newValue) return;
+      const parsed = parseInfoStore(event.newValue);
+      if (!parsed) return;
+      if (activePage === "information" && document.hasFocus()) { setNotice("另一标签页修改了信息，请刷新确认，避免覆盖当前编辑"); return; }
+      setInfoStore(parsed); setNotice("已同步另一标签页的信息修改");
+    }
+    window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
   }, [activePage]);
 
   useEffect(() => {
@@ -263,7 +288,7 @@ export default function Home() {
       <nav aria-label="主导航">
         <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span>01</span>安排</button>
         <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span>02</span>记录</button>
-        <button onClick={() => setNotice("信息功能即将开放")}><span>03</span>信息 <em>即将开放</em></button>
+        <button className={activePage === "information" ? "active" : ""} onClick={() => setActivePage("information")}><span>03</span>信息</button>
         <button onClick={() => document.getElementById("mood")?.focus()}><span>04</span>心情</button>
       </nav>
     </aside>
@@ -286,7 +311,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </section> : <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} /></section>}
+    </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} /></section> : <section className="content"><InformationView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section>}
 
     {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
       <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />
