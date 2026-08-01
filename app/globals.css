@@ -184,13 +184,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .record-editor { min-width: 0; display: flex; flex-direction: column; background: #fffefa; }
 .record-editor > header { min-height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .record-editor > header select { min-height: 40px; padding: 0 28px 0 9px; border: 1px solid var(--line); background: white; }
+.editor-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .save-state { margin-left: auto; color: #6c685f; font-size: 11px; }
 .save-state.saving { color: var(--cobalt); }
 .save-state.error { color: #b33d2b; }
 .editor-close { width: 44px; height: 44px; border: 0; background: transparent; font-size: 20px; }
 .record-editor > textarea { min-height: 0; flex: 1; resize: none; padding: 24px; border: 0; outline: 0; background: transparent; font-size: 15px; line-height: 1.8; }
-.record-editor > footer { min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
-.record-editor > footer span { margin-right: auto; color: var(--muted); font-size: 11px; }
 .ai-button { min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); background: var(--lemon); font-weight: 750; }
 .ai-button:disabled { opacity: .5; cursor: not-allowed; }
 .editor-placeholder { margin: auto; display: grid; justify-items: center; gap: 8px; color: #77736b; }
