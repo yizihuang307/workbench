@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import RecordsView from "./records-view";
+import { emptyRecordStore, parseRecordStore, recordId, RECORDS_KEY, type RecordStore } from "./records";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -94,6 +96,8 @@ function parseStore(raw: string): Store | null {
 
 export default function Home() {
   const [store, setStore] = useState<Store>(emptyStore);
+  const [recordStore, setRecordStore] = useState<RecordStore>(emptyRecordStore);
+  const [activePage, setActivePage] = useState<"schedule" | "records">("schedule");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Group | null>(null);
@@ -106,12 +110,16 @@ export default function Home() {
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? parseStore(raw) : null;
+    const recordRaw = window.localStorage.getItem(RECORDS_KEY);
+    const parsedRecords = recordRaw ? parseRecordStore(recordRaw) : null;
     queueMicrotask(() => {
       if (parsed) setStore(parsed);
       else if (raw) {
         setStore({ ...emptyStore(), tasks: { today: [], week: [], later: [] } });
         setNotice("本地数据无法读取，已安全恢复为空状态");
       }
+      if (parsedRecords) setRecordStore(parsedRecords);
+      else if (recordRaw) setNotice("记录数据无法读取，已保留安全的空记录库");
       setReady(true);
     });
   }, []);
@@ -126,6 +134,12 @@ export default function Home() {
   }, [ready, store]);
 
   useEffect(() => {
+    if (!ready) return;
+    try { window.localStorage.setItem(RECORDS_KEY, JSON.stringify(recordStore)); }
+    catch { queueMicrotask(() => setNotice("记录保存失败，请清理浏览器空间后重试")); }
+  }, [ready, recordStore]);
+
+  useEffect(() => {
     function sync(event: StorageEvent) {
       if (event.key !== STORAGE_KEY || !event.newValue) return;
       const parsed = parseStore(event.newValue);
@@ -137,6 +151,22 @@ export default function Home() {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
+
+  useEffect(() => {
+    function syncRecords(event: StorageEvent) {
+      if (event.key !== RECORDS_KEY || !event.newValue) return;
+      const parsed = parseRecordStore(event.newValue);
+      if (!parsed) return;
+      if (activePage === "records" && document.hasFocus()) {
+        setNotice("另一标签页修改了记录，请先刷新确认，避免覆盖当前编辑");
+        return;
+      }
+      setRecordStore(parsed);
+      setNotice("已同步另一标签页的记录修改");
+    }
+    window.addEventListener("storage", syncRecords);
+    return () => window.removeEventListener("storage", syncRecords);
+  }, [activePage]);
 
   useEffect(() => {
     document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen));
@@ -230,14 +260,14 @@ export default function Home() {
     <aside className="sidebar">
       <div className="brand"><span>我</span><div><strong>我的工作台</strong></div></div>
       <nav aria-label="主导航">
-        <button className="active"><span>01</span>安排</button>
-        <button onClick={() => setNotice("记录功能即将开放")}><span>02</span>记录 <em>即将开放</em></button>
+        <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span>01</span>安排</button>
+        <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span>02</span>记录</button>
         <button onClick={() => setNotice("信息功能即将开放")}><span>03</span>信息 <em>即将开放</em></button>
         <button onClick={() => document.getElementById("mood")?.focus()}><span>04</span>心情</button>
       </nav>
     </aside>
 
-    <section className="content">
+    {activePage === "schedule" ? <section className="content">
       <div className="page">
         <header className="hero">
           <div className="hero-intro"><p>{dateLabel}</p><h1>今天，先完成真正重要的事。</h1></div>
@@ -255,13 +285,15 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </section>
+    </section> : <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} onNotice={setNotice} /></section>}
 
     {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
       <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />
     </Modal>}
-    {quickOpen && <QuickNote onClose={() => setQuickOpen(false)} onSave={(text) => {
+    {quickOpen && <QuickNote categories={recordStore.categories} defaultCategoryId={recordStore.defaultCategoryId} onDefaultChange={(defaultCategoryId) => setRecordStore((current) => ({ ...current, defaultCategoryId }))} onClose={() => setQuickOpen(false)} onSave={(text, categoryId) => {
       setStore((current) => ({ ...current, quickNotes: [...current.quickNotes, { id: id(), text, createdAt: Date.now() }].slice(-100) }));
+      const now = Date.now();
+      setRecordStore((current) => ({ ...current, records: [{ id: recordId(), categoryId, body: text, pinned: false, createdAt: now, updatedAt: now }, ...current.records] }));
       setQuickOpen(false); setNotice("快速记录已保存");
     }} />}
     {notice && <div className="toast" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="关闭提示">×</button></div>}
@@ -375,7 +407,8 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal" ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${title}放大视图`}><button className="modal-close" onClick={onClose} aria-label="关闭">×</button>{children}</div></div>;
 }
 
-function QuickNote({ onSave, onClose }: { onSave: (text: string) => void; onClose: () => void }) {
+function QuickNote({ categories, defaultCategoryId, onDefaultChange, onSave, onClose }: { categories: { id: string; name: string }[]; defaultCategoryId: string; onDefaultChange: (id: string) => void; onSave: (text: string, categoryId: string) => void; onClose: () => void }) {
   const [text, setText] = useState("");
-  return <Modal title="快速记录" onClose={onClose}><section className="quick-note"><p>QUICK NOTE</p><h2>快速记录</h2><textarea autoFocus value={text} maxLength={2000} onChange={(event) => setText(event.target.value)} placeholder="先记下来，稍后再整理……" /><footer><span>{text.length}/2000</span><button onClick={onClose}>取消</button><button className="primary" disabled={!text.trim()} onClick={() => onSave(text.trim())}>保存记录</button></footer></section></Modal>;
+  const [categoryId, setCategoryId] = useState(defaultCategoryId);
+  return <Modal title="快速记录" onClose={onClose}><section className="quick-note"><p>QUICK NOTE</p><h2>快速记录</h2><label className="quick-category"><span>保存到</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><label><input type="checkbox" checked={categoryId === defaultCategoryId} onChange={() => onDefaultChange(categoryId)} /> 设为默认</label></label><textarea autoFocus value={text} maxLength={30000} onChange={(event) => setText(event.target.value)} placeholder="先记下来，稍后再整理……" /><footer><span>{text.length}/30000</span><button onClick={onClose}>取消</button><button className="primary" disabled={!text.trim()} onClick={() => onSave(text.trim(), categoryId)}>保存记录</button></footer></section></Modal>;
 }
