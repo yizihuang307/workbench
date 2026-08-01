@@ -89,6 +89,10 @@ test("record count and AI action share the editor header", async () => {
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(view, /<header><span className="editor-category">.*className="editor-count">.*className=\{`save-state.*className="ai-button"/s);
-  assert.match(css, /\.record-editor > header \.ai-button \{[^}]*min-height: 40px;[^}]*padding-inline: 12px/);
+  assert.match(css, /\.save-state \{[^}]*color:[^}]*white-space: nowrap/);
+  assert.doesNotMatch(css, /\.save-state \{[^}]*margin-left: auto/);
+  assert.match(css, /\.record-editor > header \.ai-button \{[^}]*min-height: 44px;[^}]*margin-left: auto/);
+  assert.match(css, /\.record-editor > header \.ai-button > span \{[^}]*min-height: 32px;[^}]*padding: 0 9px/);
+  assert.match(css, /\.editor-category \{[^}]*min-height: 32px;[^}]*padding: 0 9px/);
   assert.doesNotMatch(view, /<footer><span>\{selected\.body\.length\}/);
 });
