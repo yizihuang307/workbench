@@ -10,6 +10,7 @@ colors:
   primary-border: "#d1d1fa"
   accent: "#ffc53d"
   accent-soft: "#fff7c2"
+  info: "#0090ff"
   surface: "#ffffff"
   surface-glass: "#ffffffe0"
   on-surface: "#202020"
@@ -135,6 +136,11 @@ components:
   tab-active:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.surface}"
+  tab-marker:
+    backgroundColor: "{colors.info}"
+    textColor: "{colors.on-surface}"
+    rounded: "{rounded.full}"
+    size: 8px
   card-glass:
     backgroundColor: "{colors.surface-glass}"
     textColor: "{colors.on-surface}"
@@ -214,6 +220,7 @@ components:
 - **危险按钮**：默认白底红字，只有最终确认且风险明确时才允许红色实底。
 - **输入框**：桌面高 40px，14px 正文，11px 左右内边距；focus 使用紫色边框和低透明紫色焦点环。长文本编辑区按内容任务确定高度，不套用 40px。
 - **分类标签 / Tab**：桌面高 36px，13px；激活态紫底白字，数量用 9–11px 且降低强调。标签之间 6px，不使用大块留白。
+- **Tab 色标圆点**：分类与筛选 Tab 的文字前放置 8px 彩色圆点，固定使用蓝、绿、琥珀、番茄红、浅紫的循环色序。圆点只帮助快速辨认分类，不代表状态；激活态仍由紫底白字表达，并给圆点增加细白环保证可见。管理、设置、删除等动作按钮不加圆点。
 - **图标按钮**：视觉盒可为 32–36px；若桌面是高密度列表，可视图形较小，但可点击区域应尽量保持 40–44px。移动端统一至少 44px。
 - **卡片**：18px 圆角、轻玻璃白、低对比边框。重点卡片使用浅紫同色系纯色或透明色调，不使用渐变。
 - **弹窗**：20px 圆角、24px 内边距；常规标题 20px。关闭按钮 32–36px，位于右上；主要动作放在右侧，按钮高 36px。移动端弹窗贴底，操作高 44px。
@@ -224,11 +231,13 @@ components:
 ## Do's and Don'ts
 
 - **Do** 用紫色建立品牌识别，用浅紫组织大区域，用琥珀黄做小面积高亮。
+- **Do** 在分类与筛选 Tab 前使用 8px 固定色序圆点增加页面活力；同一分类在同一列表中保持颜色稳定。
 - **Do** 保持桌面高密度：按钮和 Tab 36px，输入 40px；移动端回到 44px 触控尺寸。
 - **Do** 让渐变集中在主按钮、侧栏和背景光晕；焦点内容卡片使用纯色浅紫。
 - **Do** 让卡片、弹窗、按钮分别使用 18px、20px、9px 的清晰圆角层级。
 - **Do** 新组件优先复用本文已有颜色、字号、间距和组件原子；确需新增 token 时先更新本文。
 - **Don't** 用琥珀黄作为大卡片或大面积重要区域背景。
+- **Don't** 给纯操作按钮添加分类圆点，也不要让圆点替代文字、选中态或真实状态提示。
 - **Don't** 把所有按钮都做成紫色实底或渐变；每个局部只保留一个最强主操作。
 - **Don't** 使用 44px 以上的桌面普通按钮，也不要把 36px 规则错误套到移动端。
 - **Don't** 同一组控件混用 8、12、16px 等多个相近圆角；优先落到既定档位。

@@ -475,6 +475,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   --tomato-9: #e54d2e;
   --tomato-11: #d13415;
   --success-9: #30a46c;
+  --blue-9: #0090ff;
   --info-9: #0090ff;
   --gray-1: #fcfcfc;
   --gray-2: #f9f9f9;
@@ -704,6 +705,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .category-tab > button { min-height: 34px; padding: 0 10px; font-size: 13px; }
 .category-bar em { margin-left: 4px; font-size: 9px; }
 .category-bar .category-manage { padding-inline: 12px; }
+
+/* Small semantic color markers add energy without turning tabs into color blocks */
+.category-bar > button:not(.category-manage), .category-tab > button,
+.info-index button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.category-bar > button:not(.category-manage)::before, .category-tab > button::before,
+.info-index button::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--blue-9);
+}
+.category-tab:nth-child(2) > button::before, .info-index button:nth-child(2)::before { background: var(--success-9); }
+.category-tab:nth-child(3) > button::before, .info-index button:nth-child(3)::before { background: var(--amber-9); }
+.category-tab:nth-child(4) > button::before, .info-index button:nth-child(4)::before { background: var(--tomato-9); }
+.category-tab:nth-child(5) > button::before, .info-index button:nth-child(5)::before { background: var(--violet-8); }
+.category-tab:nth-child(6) > button::before, .info-index button:nth-child(6)::before { background: var(--success-9); }
+.category-bar > button.active::before, .category-tab.active > button::before,
+.info-index button:first-child::before {
+  box-shadow: 0 0 0 2px rgba(255,255,255,.58);
+}
 
 .records-modal { width: min(620px,100%); padding: 24px; }
 .records-modal > header { padding-right: 38px; }

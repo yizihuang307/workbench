@@ -148,3 +148,16 @@ test("desktop information controls use the compact size system", async () => {
   assert.match(css, /\.file-block a \{[^}]*min-height: var\(--control-compact\)/s);
   assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.info-index button, \.info-manage,[\s\S]*min-height: var\(--control-compact\)/);
 });
+
+test("record and information filter tabs use restrained color markers", async () => {
+  const [css, design] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../design.md", import.meta.url), "utf8")),
+  ]);
+  assert.match(css, /--blue-9:\s*#0090ff/);
+  assert.match(css, /\.category-bar > button:not\(\.category-manage\)::before, \.category-tab > button::before,[\s\S]*\.info-index button::before \{[\s\S]*width: 8px;[\s\S]*border-radius: 50%/);
+  assert.match(css, /\.category-tab:nth-child\(2\) > button::before, \.info-index button:nth-child\(2\)::before \{ background: var\(--success-9\)/);
+  assert.doesNotMatch(css, /\.category-manage::before/);
+  assert.match(design, /\*\*Tab 色标圆点\*\*/);
+  assert.match(design, /管理、设置、删除等动作按钮不加圆点/);
+});
