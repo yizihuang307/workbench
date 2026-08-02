@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordsView from "./records-view";
 import { emptyRecordStore, parseRecordStore, recordId, RECORDS_KEY, type RecordStore } from "./records";
-import InformationView from "./information-view";
+import LinkLibraryView from "./link-library-view";
+import ResourceBoardView from "./resource-board-view";
 import { emptyInfoStore, type InfoStore } from "./information";
 import { INFO_SYNC_KEY, loadInfoStore, migrateLegacyInfoStore, saveInfoStore } from "./information-storage";
 
@@ -103,7 +104,7 @@ export default function Home() {
   const [recordStorageError, setRecordStorageError] = useState(false);
   const [infoStore, setInfoStore] = useState<InfoStore>(emptyInfoStore);
   const [infoStorageError, setInfoStorageError] = useState(false);
-  const [activePage, setActivePage] = useState<"schedule" | "records" | "information">("schedule");
+  const [activePage, setActivePage] = useState<"schedule" | "records" | "links" | "resources">("schedule");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Group | null>(null);
@@ -192,7 +193,7 @@ export default function Home() {
   useEffect(() => {
     function syncInfo(event: StorageEvent) {
       if (event.key !== INFO_SYNC_KEY || !event.newValue) return;
-      if (activePage === "information" && document.hasFocus()) { setNotice("另一标签页修改了信息，请刷新确认，避免覆盖当前编辑"); return; }
+      if ((activePage === "links" || activePage === "resources") && document.hasFocus()) { setNotice("另一标签页修改了信息，请刷新确认，避免覆盖当前编辑"); return; }
       void loadInfoStore().then((parsed) => { if (parsed) { setInfoStore(parsed); setNotice("已同步另一标签页的信息修改"); } });
     }
     window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
@@ -292,7 +293,8 @@ export default function Home() {
       <nav aria-label="主导航">
         <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span aria-hidden>📅</span>安排</button>
         <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span aria-hidden>📝</span>记录</button>
-        <button className={activePage === "information" ? "active" : ""} onClick={() => setActivePage("information")}><span aria-hidden>🔖</span>信息</button>
+        <button className={activePage === "links" ? "active" : ""} onClick={() => setActivePage("links")}><span aria-hidden>🔗</span>链接</button>
+        <button className={activePage === "resources" ? "active" : ""} onClick={() => setActivePage("resources")}><span aria-hidden>📚</span>资料</button>
         {/* 心情模块暂时隐藏：恢复时重新启用导航入口。 */}
       </nav>
     </aside>
@@ -315,7 +317,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} /></section> : <section className="content"><InformationView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section>}
+    </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} /></section> : activePage === "links" ? <section className="content"><LinkLibraryView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section> : <section className="content"><ResourceBoardView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section>}
 
     {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
       <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />

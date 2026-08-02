@@ -1,13 +1,22 @@
-export type InfoSectionType = "systems" | "resources";
+export type InfoSectionType = "resources";
 export type InfoSection = { id: string; name: string; type: InfoSectionType; order: number; createdAt: number };
 export type SystemLink = { id: string; url: string; label: string };
-export type SystemItem = { id: string; sectionId: string; name: string; icon: string; links: SystemLink[]; defaultLinkId: string; order: number; createdAt: number; updatedAt: number };
+// v2：链接按分组管理，记录最近打开时间用于“最近打开”排序。
+export type LinkGroup = { id: string; name: string; order: number; createdAt: number };
+export type SystemItem = { id: string; sectionId: string; groupId: string; name: string; icon: string; links: SystemLink[]; defaultLinkId: string; order: number; lastOpenedAt: number; createdAt: number; updatedAt: number };
 export type TextBlock = { id: string; type: "text"; text: string };
 export type LinkBlock = { id: string; type: "link"; url: string; title: string; domain: string };
 export type FileBlock = { id: string; type: "file"; name: string; mime: string; size: number; dataUrl: string };
 export type InfoBlock = TextBlock | LinkBlock | FileBlock;
-export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; documentHtml?: string; blocks: InfoBlock[]; pinned: boolean; createdAt: number; updatedAt: number };
-export type InfoStore = { version: 1; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
+// v2：资源增加 order 字段支持看板内手动排序；保留 documentHtml 以兼容统一文档编辑器。
+export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; documentHtml?: string; blocks: InfoBlock[]; pinned: boolean; order: number; createdAt: number; updatedAt: number };
+export type InfoStore = { version: 2; linkGroups: LinkGroup[]; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
+
+// 链接分组：空字符串代表“未分组”。
+export const UNGROUPED = "";
+export const ALL_GROUP = "all";
+export type LinkSortMode = "manual" | "recent-open" | "name";
+export type ResourceSortMode = "manual" | "name" | "updated";
 
 export const INFO_KEY = "workbench.information.v1";
 export const DOCUMENT_LIMIT = 30000;
@@ -17,10 +26,9 @@ export const TOTAL_FILE_LIMIT = 200 * 1024 * 1024;
 export function infoId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`; }
 
 export function emptyInfoStore(now = Date.now()): InfoStore {
-  return { version: 1, sections: [
-    { id: "systems", name: "常用链接", type: "systems", order: 0, createdAt: now },
-    { id: "work", name: "工作资料", type: "resources", order: 1, createdAt: now + 1 },
-    { id: "learning", name: "学习收藏", type: "resources", order: 2, createdAt: now + 2 },
+  return { version: 2, linkGroups: [], sections: [
+    { id: "work", name: "工作资料", type: "resources", order: 0, createdAt: now },
+    { id: "learning", name: "学习收藏", type: "resources", order: 1, createdAt: now + 1 },
   ], systems: [], resources: [] };
 }
 
@@ -133,19 +141,39 @@ export function deriveDocumentTitle(documentHtml: string, blocks: InfoBlock[]) {
   return first ? first.slice(0, 200) : deriveTitle(blocks);
 }
 
-export function visibleResources(store: InfoStore, sectionId: string, query: string) {
+export function sortResources(items: ResourceItem[], mode: ResourceSortMode): ResourceItem[] {
+  const list = [...items];
+  if (mode === "name") return list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.title.localeCompare(b.title, "zh"));
+  if (mode === "updated") return list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+  return list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order || a.createdAt - b.createdAt);
+}
+
+export function visibleResources(store: InfoStore, sectionId: string, query: string, mode: ResourceSortMode = "manual") {
   const needle = query.trim().toLocaleLowerCase();
-  return store.resources.filter((item) => {
+  const filtered = store.resources.filter((item) => {
     if (sectionId !== "all" && item.sectionId !== sectionId) return false;
     if (!needle) return true;
     const searchable = [item.title, item.documentHtml ? htmlText(item.documentHtml) : "", ...item.blocks.flatMap((block) => block.type === "text" ? [block.text] : block.type === "link" ? [block.title, block.domain] : [block.name])].join("\n").toLocaleLowerCase();
     return searchable.includes(needle);
-  }).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+  });
+  return sortResources(filtered, mode);
 }
 
-export function visibleSystems(store: InfoStore, query: string) {
+export function sortLinks(links: SystemItem[], mode: LinkSortMode): SystemItem[] {
+  const list = [...links];
+  if (mode === "recent-open") return list.sort((a, b) => b.lastOpenedAt - a.lastOpenedAt || a.createdAt - b.createdAt);
+  if (mode === "name") return list.sort((a, b) => a.name.localeCompare(b.name, "zh"));
+  return list.sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+}
+
+export function visibleLinks(store: InfoStore, groupId: string, query: string, mode: LinkSortMode = "manual") {
   const needle = query.trim().toLocaleLowerCase();
-  return [...store.systems].filter((item) => !needle || [item.name, ...item.links.flatMap((link) => [link.label, link.url])].join("\n").toLocaleLowerCase().includes(needle)).sort((a, b) => a.order - b.order);
+  const filtered = [...store.systems].filter((item) => {
+    if (groupId !== ALL_GROUP && item.groupId !== groupId) return false;
+    if (!needle) return true;
+    return [item.name, ...item.links.flatMap((link) => [link.label, link.url])].join("\n").toLocaleLowerCase().includes(needle);
+  });
+  return sortLinks(filtered, mode);
 }
 
 export function updateSystemLink(store: InfoStore, id: string, nameInput: string, urlInput: string, now = Date.now()) {
@@ -162,29 +190,38 @@ export function updateSystemLink(store: InfoStore, id: string, nameInput: string
 }
 
 export function deleteResourceSection(store: InfoStore, sectionId: string, targetSectionId: string) {
-  const resourceSections = store.sections.filter((section) => section.type === "resources");
-  if (resourceSections.length <= 1 || sectionId === targetSectionId || !resourceSections.some((section) => section.id === sectionId) || !resourceSections.some((section) => section.id === targetSectionId)) return null;
+  if (store.sections.length <= 1 || sectionId === targetSectionId || !store.sections.some((section) => section.id === sectionId) || !store.sections.some((section) => section.id === targetSectionId)) return null;
   return { ...store, sections: store.sections.filter((section) => section.id !== sectionId).map((section, index) => ({ ...section, order: index })), resources: store.resources.map((item) => item.sectionId === sectionId ? { ...item, sectionId: targetSectionId } : item) };
 }
 
 export function parseInfoStore(raw: string): InfoStore | null {
   try {
-    const value = JSON.parse(raw) as Partial<InfoStore>;
+    const value = JSON.parse(raw) as Partial<InfoStore> & { version?: number; sections?: unknown[] };
     if (!Array.isArray(value.sections) || !Array.isArray(value.systems) || !Array.isArray(value.resources)) return null;
+    const isV2 = value.version === 2;
     const ids = new Set<string>(), names = new Set<string>();
-    const sections: InfoSection[] = value.sections.flatMap((item): InfoSection[] => {
-      if (!item || typeof item.id !== "string" || typeof item.name !== "string" || (item.type !== "systems" && item.type !== "resources")) return [];
+    // v2 仅保留 resources 类型分区；v1 的 systems 分区被丢弃。
+    const sections: InfoSection[] = (value.sections as InfoSection[]).flatMap((item): InfoSection[] => {
+      if (!item || typeof item.id !== "string" || typeof item.name !== "string" || item.type !== "resources") return [];
       const name = item.name.trim().slice(0, 40);
       if (!name || ids.has(item.id) || names.has(name)) return [];
       ids.add(item.id); names.add(name);
-      return [{ id: item.id, name: item.type === "systems" && name === "常用系统" ? "常用链接" : name, type: item.type, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now() }];
+      return [{ id: item.id, name, type: "resources", order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now() }];
     });
     if (!sections.length) return null;
-    const systemSection = sections.find((item) => item.type === "systems")?.id;
-    const resourceSection = sections.find((item) => item.type === "resources")?.id;
+    const firstSectionId = sections[0].id;
     const seen = new Set<string>();
+    // v2 链接分组
+    const linkGroups: LinkGroup[] = isV2 && Array.isArray((value as { linkGroups?: unknown[] }).linkGroups)
+      ? (value as { linkGroups: LinkGroup[] }).linkGroups.flatMap((item): LinkGroup[] => {
+          if (!item || typeof item.id !== "string" || typeof item.name !== "string" || ids.has(item.id)) return [];
+          const name = item.name.trim().slice(0, 40); if (!name) return [];
+          ids.add(item.id);
+          return [{ id: item.id, name, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now() }];
+        }).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt)
+      : [];
     const systems: SystemItem[] = value.systems.flatMap((item): SystemItem[] => {
-      if (!systemSection || !item || typeof item.id !== "string" || typeof item.name !== "string" || seen.has(item.id) || !Array.isArray(item.links)) return [];
+      if (!item || typeof item.id !== "string" || typeof item.name !== "string" || seen.has(item.id) || !Array.isArray(item.links)) return [];
       const links = item.links.flatMap((link): SystemLink[] => {
         if (!link || typeof link.id !== "string" || typeof link.url !== "string") return [];
         const url = safeUrl(link.url); return url ? [{ id: link.id, url, label: typeof link.label === "string" ? link.label.trim().slice(0, 40) : "" }] : [];
@@ -194,10 +231,11 @@ export function parseInfoStore(raw: string): InfoStore | null {
       const rawIcon = typeof item.icon === "string" ? item.icon.trim() : "";
       const fallbackIcon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(links[0].url).hostname)}&sz=64`;
       const icon = /^https?:\/\//i.test(rawIcon) ? safeUrl(rawIcon)?.slice(0, 2048) || fallbackIcon : fallbackIcon;
-      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "systems") ? item.sectionId : systemSection, name: item.name.trim().slice(0, 200) || new URL(links[0].url).hostname, icon, links, defaultLinkId: links.some((link) => link.id === item.defaultLinkId) ? item.defaultLinkId : links[0].id, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
+      const groupId = isV2 && typeof (item as SystemItem).groupId === "string" && linkGroups.some((group) => group.id === (item as SystemItem).groupId) ? (item as SystemItem).groupId : UNGROUPED;
+      return [{ id: item.id, sectionId: firstSectionId, groupId, name: item.name.trim().slice(0, 200) || new URL(links[0].url).hostname, icon, links, defaultLinkId: links.some((link) => link.id === item.defaultLinkId) ? item.defaultLinkId : links[0].id, order: Number(item.order) || 0, lastOpenedAt: Number((item as SystemItem).lastOpenedAt) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
     const resources: ResourceItem[] = value.resources.flatMap((item): ResourceItem[] => {
-      if (!resourceSection || !item || typeof item.id !== "string" || seen.has(item.id) || !Array.isArray(item.blocks)) return [];
+      if (!item || typeof item.id !== "string" || seen.has(item.id) || !Array.isArray(item.blocks)) return [];
       let acceptedFiles = 0;
       const blocks = item.blocks.flatMap((block): InfoBlock[] => {
         if (!block || typeof block.id !== "string") return [];
@@ -213,8 +251,10 @@ export function parseInfoStore(raw: string): InfoStore | null {
       const derived = documentHtml ? deriveDocumentTitle(documentHtml, blocks) : deriveTitle(blocks);
       const rawTitle = typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 200) : derived;
       const repairTruncatedAutoTitle = rawTitle.length === 1 && derived.length > 1 && derived.startsWith(rawTitle);
-      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "resources") ? item.sectionId : resourceSection, title: repairTruncatedAutoTitle ? derived : rawTitle, titleAuto: repairTruncatedAutoTitle || Boolean(item.titleAuto), documentHtml, blocks, pinned: Boolean(item.pinned), createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
+      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId) ? item.sectionId : firstSectionId, title: repairTruncatedAutoTitle ? derived : rawTitle, titleAuto: repairTruncatedAutoTitle || Boolean(item.titleAuto), documentHtml, blocks, pinned: Boolean(item.pinned), order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
-    return { version: 1, sections: sections.sort((a, b) => a.order - b.order), systems, resources: totalFileBytes({ version: 1, sections, systems, resources }) <= TOTAL_FILE_LIMIT ? resources : resources.map((item) => ({ ...item, blocks: item.blocks.filter((block) => block.type !== "file") })) };
+    const store: InfoStore = { version: 2, linkGroups, sections: sections.sort((a, b) => a.order - b.order), systems, resources };
+    if (totalFileBytes(store) > TOTAL_FILE_LIMIT) store.resources = store.resources.map((item) => ({ ...item, blocks: item.blocks.filter((block) => block.type !== "file") }));
+    return store;
   } catch { return null; }
 }
