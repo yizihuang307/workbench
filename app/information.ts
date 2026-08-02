@@ -189,7 +189,8 @@ export function parseInfoStore(raw: string): InfoStore | null {
       if (!links.length) return [];
       seen.add(item.id);
       const rawIcon = typeof item.icon === "string" ? item.icon.trim() : "";
-      const icon = /^https?:\/\//i.test(rawIcon) ? safeUrl(rawIcon)?.slice(0, 2048) || "站" : rawIcon.slice(0, 2) || "站";
+      const fallbackIcon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(links[0].url).hostname)}&sz=64`;
+      const icon = /^https?:\/\//i.test(rawIcon) ? safeUrl(rawIcon)?.slice(0, 2048) || fallbackIcon : fallbackIcon;
       return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "systems") ? item.sectionId : systemSection, name: item.name.trim().slice(0, 200) || new URL(links[0].url).hostname, icon, links, defaultLinkId: links.some((link) => link.id === item.defaultLinkId) ? item.defaultLinkId : links[0].id, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
     const resources: ResourceItem[] = value.resources.flatMap((item): ResourceItem[] => {

@@ -319,6 +319,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .system-open span, .system-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .system-open span { font-weight: 700; }
 .system-open small { color: var(--muted); font-size: 10px; }
+.system-open mark, .resource-main mark { padding: 0 2px; border-radius: 3px; background: var(--amber-3); color: inherit; }
 .system-remove { width: 36px; height: 44px; border: 0; background: transparent; color: var(--muted); letter-spacing: -1px; }
 .system-menu { position: absolute; z-index: 30; top: 46px; right: 0; width: 170px; display: grid; padding: 4px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 3px 3px 0 rgba(36,34,31,.14); }
 .system-menu button { min-height: 36px; padding: 0 8px; border: 0; background: transparent; text-align: left; }

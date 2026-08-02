@@ -216,3 +216,16 @@ test("information search is a single direct input without a decorative outer box
   assert.match(css, /\.info-search \{[^}]*border: 0/);
   assert.match(css, /\.info-search input \{[^}]*border: 1px solid/);
 });
+
+test("information link creation and search use the revised interaction", async () => {
+  const [view, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.doesNotMatch(view, /重新识别名称和 Logo/);
+  assert.doesNotMatch(view, /粘贴网址后，将自动识别网站名称和 Logo/);
+  assert.match(view, /<span>名称<\/span>/);
+  assert.match(view, /自动填充，可修改/);
+  assert.match(view, /function HighlightText/);
+  assert.match(css, /\.system-open mark, \.resource-main mark/);
+});

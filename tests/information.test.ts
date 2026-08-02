@@ -155,6 +155,12 @@ test("system icon URL survives storage parsing", () => {
   assert.equal(parseInfoStore(JSON.stringify(store))?.systems[0].icon, "https://example.com/favicon.ico");
 });
 
+test("legacy letter icons migrate to a persistent favicon URL", () => {
+  const store = emptyInfoStore(1);
+  store.systems = [{ id: "s", sectionId: "systems", name: "示例", icon: "S", links: [{ id: "l", url: "https://example.com/", label: "主页" }], defaultLinkId: "l", order: 0, createdAt: 1, updatedAt: 1 }];
+  assert.match(parseInfoStore(JSON.stringify(store))?.systems[0].icon || "", /^https:\/\/www\.google\.com\/s2\/favicons\?/);
+});
+
 test("information search includes common link names, domains and URLs", () => {
   const store = emptyInfoStore(1);
   store.systems = [{ id: "s", sectionId: "systems", name: "企业微信文档", icon: "企", links: [{ id: "l", url: "https://docs.example.com/work", label: "主页" }], defaultLinkId: "l", order: 0, createdAt: 1, updatedAt: 1 }];
