@@ -109,6 +109,7 @@ test("modern violet design system and emoji navigation stay in place", async () 
   assert.match(css, /--violet-9:\s*#5b5bd6/);
   assert.match(css, /--amber-9:\s*#ffc53d/);
   assert.match(css, /--success-9:\s*#30a46c/);
+  assert.match(css, /--tomato-11:\s*#d13415/);
   assert.match(css, /backdrop-filter:\s*blur\(18px\)/);
 });
 
@@ -119,4 +120,16 @@ test("desktop record controls use the compact size system", async () => {
   assert.match(css, /\.category-bar > button, \.category-tab \{[^}]*min-height: var\(--control-compact\)/s);
   assert.match(css, /\.records-modal > header h2 \{[^}]*font-size: 20px/s);
   assert.match(css, /@media \(max-width: 640px\) \{[^}]*--control-compact: 44px/s);
+});
+
+test("design system documents the confirmed density and visual guardrails", async () => {
+  const design = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../design.md", import.meta.url), "utf8"));
+  assert.match(design, /primary: "#5b5bd6"/);
+  assert.match(design, /control-compact: 36px/);
+  assert.match(design, /control-default: 40px/);
+  assert.match(design, /touch-target: 44px/);
+  assert.match(design, /error: "#d13415"/);
+  assert.match(design, /重点卡片使用浅紫同色系纯色或透明色调，不使用渐变/);
+  assert.match(design, /琥珀黄只承担小面积提醒/);
+  assert.match(design, /## Overview[\s\S]*## Colors[\s\S]*## Typography[\s\S]*## Layout[\s\S]*## Elevation & Depth[\s\S]*## Shapes[\s\S]*## Components[\s\S]*## Do's and Don'ts/);
 });

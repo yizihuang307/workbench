@@ -471,6 +471,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   --amber-3: #fff7c2;
   --amber-9: #ffc53d;
   --tomato-9: #e54d2e;
+  --tomato-11: #d13415;
   --success-9: #30a46c;
   --info-9: #0090ff;
   --gray-1: #fcfcfc;
@@ -722,6 +723,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 9px;
   font-size: 13px;
 }
+.category-edit button { color: var(--tomato-11); }
 .category-delete-dialog footer, .ai-consent footer, .ai-result footer { gap: 8px; margin-top: 18px; }
 .category-delete-dialog footer button, .ai-consent footer button, .ai-result footer button {
   min-height: var(--control-compact);
