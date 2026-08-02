@@ -174,6 +174,7 @@ test("information detail is one accessible document editor with complete core co
   assert.match(editor, /deleteColumn\(\)/);
   assert.match(editor, /resourceImage/);
   assert.match(editor, /image-resize-handle/);
+  assert.match(editor, /title="点击放大"/);
   assert.match(editor, /resource-image-preview/);
   assert.match(editor, /resourceAttachment/);
   assert.doesNotMatch(editor, /document\.execCommand/);

@@ -35,8 +35,8 @@ const ResourceAttachment = Node.create({
 
 function ResourceImageView({ node, selected, updateAttributes }: ReactNodeViewProps) {
   const width = Math.max(160, Math.min(900, Number(node.attrs.width) || 520));
-  return <NodeViewWrapper className={`tiptap-image ${selected ? "selected" : ""}`} style={{ width }} data-drag-handle onDoubleClick={() => window.dispatchEvent(new CustomEvent("resource-image-preview", { detail: { src: node.attrs.src, name: node.attrs.alt } }))}>
-    <img src={node.attrs.src} alt={node.attrs.alt || "图片"} draggable={false} />
+  return <NodeViewWrapper className={`tiptap-image ${selected ? "selected" : ""}`} style={{ width }} data-drag-handle>
+    <img src={node.attrs.src} alt={node.attrs.alt || "图片"} draggable={false} title="点击放大" onClick={() => window.dispatchEvent(new CustomEvent("resource-image-preview", { detail: { src: node.attrs.src, name: node.attrs.alt } }))} />
     <button className="image-resize-handle" aria-label="调整图片大小" title="拖动调整大小" onPointerDown={(event) => {
       event.preventDefault(); event.stopPropagation(); const startX = event.clientX, startWidth = width;
       const move = (moveEvent: PointerEvent) => updateAttributes({ width: Math.max(160, Math.min(900, startWidth + moveEvent.clientX - startX)) });
