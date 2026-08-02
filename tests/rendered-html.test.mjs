@@ -110,11 +110,12 @@ test("modern violet design system and active navigation stay in place", async ()
   ]);
   assert.match(page, /<span aria-hidden>📅<\/span>安排/);
   assert.match(page, /<span aria-hidden>📝<\/span>记录/);
-  assert.match(page, /<span aria-hidden>🔖<\/span>信息/);
+  assert.match(page, /<span aria-hidden>🔗<\/span>链接/);
+  assert.match(page, /<span aria-hidden>📚<\/span>资料/);
   assert.doesNotMatch(page, /<span aria-hidden>🌤️<\/span>心情/);
   assert.doesNotMatch(page, /<div className="mood-block">/);
   assert.match(page, /心情模块暂时隐藏/);
-  assert.match(css, /\.sidebar nav \{ grid-template-columns: repeat\(3,1fr\);/);
+  assert.match(css, /\.sidebar nav \{ grid-template-columns: repeat\(4,1fr\);/);
   assert.match(css, /--violet-9:\s*#5b5bd6/);
   assert.match(css, /--amber-9:\s*#ffc53d/);
   assert.match(css, /--success-9:\s*#30a46c/);
@@ -157,7 +158,7 @@ test("desktop information controls use the compact size system", async () => {
 
 test("information detail is one accessible document editor with complete core controls", async () => {
   const [view, editor, model, css] = await Promise.all([
-    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/resource-board-view.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-editor.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information.ts", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
@@ -216,22 +217,23 @@ test("desktop record list and editor scroll independently", async () => {
   assert.match(css, /\.record-list, \.record-document-editor \{[\s\S]*overflow-y: auto;[\s\S]*overscroll-behavior: contain;/);
 });
 
-test("information management exposes complete edit and delete actions without clipped menus", async () => {
-  const [view, css] = await Promise.all([
-    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+test("information management exposes complete edit, move and delete actions", async () => {
+  const [linkView, resourceView, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/resource-board-view.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
-  assert.match(view, /aria-label="编辑常用链接"/);
-  assert.match(view, /编辑名称和网址/);
-  assert.match(view, /删除分区/);
-  assert.match(view, /deleteResourceSection/);
-  assert.match(css, /\.system-section\.menu-open \{[^}]*overflow: visible/);
-  assert.match(css, /\.system-section\.menu-open \{[^}]*z-index:/);
+  assert.match(linkView, /aria-label="编辑常用链接"/);
+  assert.match(linkView, /编辑名称和网址/);
+  assert.match(linkView, /deleteLinkGroup/);
+  assert.match(resourceView, /删除分区/);
+  assert.match(resourceView, /deleteResourceSection/);
+  assert.match(css, /\.sort-popover \{[^}]*z-index: 30/);
 });
 
 test("information search is a single direct input without a decorative outer box", async () => {
   const [view, css] = await Promise.all([
-    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(view, /<div className="info-search"><input/);
@@ -242,7 +244,7 @@ test("information search is a single direct input without a decorative outer box
 
 test("information link creation and search use the revised interaction", async () => {
   const [view, css] = await Promise.all([
-    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.doesNotMatch(view, /重新识别名称和 Logo/);
