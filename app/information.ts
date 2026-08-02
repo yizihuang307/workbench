@@ -55,14 +55,17 @@ export function sanitizeDocumentHtml(input: string) {
     }
     if (tag === "img") {
       const fileId = rawAttrs.match(/\bdata-file-id\s*=\s*["']([^"']+)["']/i)?.[1];
-      return fileId ? `<img data-file-id="${escapeAttribute(fileId)}" alt="">` : "";
+      const width = Math.max(160, Math.min(900, Number(rawAttrs.match(/\bdata-width\s*=\s*["']([^"']+)["']/i)?.[1]) || 520));
+      return fileId ? `<img data-file-id="${escapeAttribute(fileId)}" data-width="${width}" alt="">` : "";
     }
     if (!allowed.has(tag)) return "";
     if (whole.startsWith("</")) return `</${tag}>`;
     if (tag === "br") return "<br>";
     const fileId = rawAttrs.match(/\bdata-file-id\s*=\s*["']([^"']+)["']/i)?.[1];
     const checked = rawAttrs.match(/\bdata-checked\s*=\s*["'](true|false)["']/i)?.[1]?.toLowerCase();
-    const attrs = fileId ? ` data-file-id="${escapeAttribute(fileId)}" contenteditable="false"` : checked ? ` data-checked="${checked}"` : "";
+    const taskType = rawAttrs.match(/\bdata-type\s*=\s*["'](taskList|taskItem)["']/i)?.[1];
+    const attachment = /\bdata-attachment\s*=\s*["']true["']/i.test(rawAttrs);
+    const attrs = fileId ? ` data-file-id="${escapeAttribute(fileId)}"${attachment ? ' data-attachment="true"' : ""} contenteditable="false"` : `${taskType ? ` data-type="${taskType}"` : ""}${checked ? ` data-checked="${checked}"` : ""}`;
     return `<${tag}${attrs}>`;
   }).slice(0, 250000);
 }

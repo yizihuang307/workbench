@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { deleteResourceSection, deriveDocumentTitle, FILE_LIMIT, htmlText, infoId, legacyDocumentHtml, linkifyPlainText, safeUrl, sanitizeDocumentHtml, tableHtml, totalFileBytes, TOTAL_FILE_LIMIT, updateSystemLink, urlMeta, visibleResources, visibleSystems, type InfoBlock, type InfoSection, type InfoStore, type ResourceItem, type SystemItem } from "./information";
+import { deleteResourceSection, htmlText, infoId, safeUrl, totalFileBytes, updateSystemLink, urlMeta, visibleResources, visibleSystems, type InfoSection, type InfoStore, type ResourceItem, type SystemItem } from "./information";
+import InformationEditor from "./information-editor";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -115,97 +116,8 @@ function ResourceRow({ item, query, onOpen, onPin }: { item: ResourceItem; query
 function HighlightText({ text, query }: { text: string; query: string }) { const needle=query.trim(); if(!needle)return <>{text}</>; const parts=text.split(new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"ig")); return <>{parts.map((part,index)=>part.toLocaleLowerCase()===needle.toLocaleLowerCase()?<mark key={index}>{part}</mark>:part)}</>; }
 
 function ResourceWorkspace({ item, sections, saveState, fileBytes, onClose, onDelete, onUpdate, onNotice }: { item: ResourceItem; sections: InfoSection[]; saveState: string; fileBytes: number; onClose: () => void; onDelete: () => void; onUpdate: (updater: (item: ResourceItem) => ResourceItem) => void; onNotice: (message: string) => void }) {
-  const fileInput = useRef<HTMLInputElement>(null);
-  const editor = useRef<HTMLDivElement>(null);
-  const [initialHtml] = useState(() => enrichDocumentHtml(item.documentHtml || legacyDocumentHtml(item.blocks), item.blocks));
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [previewFile, setPreviewFile] = useState<Extract<InfoBlock,{type:"file"}> | null>(null);
-
-  function saveDocument() {
-    if (!editor.current) return;
-    const clean = sanitizeDocumentHtml(editor.current.innerHTML);
-    const referenced = new Set(Array.from(editor.current.querySelectorAll<HTMLElement>("[data-file-id]")).map((node) => node.dataset.fileId));
-    const nextBlocks = item.blocks.filter((block) => block.type === "file" && referenced.has(block.id));
-    onUpdate((current) => ({ ...current, documentHtml: clean, blocks: nextBlocks, title: current.titleAuto !== false ? deriveDocumentTitle(clean, nextBlocks) : current.title, titleAuto: current.titleAuto !== false, updatedAt: Date.now() }));
-  }
-  function command(name: string, value?: string) { editor.current?.focus(); document.execCommand(name, false, value); saveDocument(); }
-  async function addFiles(files: FileList | File[] | null, point?: { x: number; y: number }) {
-    if (!files || !editor.current) return;
-    const incoming = Array.from(files); const currentFiles = item.blocks.filter((block) => block.type === "file").length;
-    const added: Extract<InfoBlock,{type:"file"}>[] = []; let nextBytes = fileBytes;
-    for (const file of incoming.slice(0, Math.max(0, 20-currentFiles))) {
-      if (file.size > FILE_LIMIT) { onNotice(`${file.name} 超过 20MB`); continue; }
-      if (nextBytes + file.size > TOTAL_FILE_LIMIT) { onNotice("本地文件总容量将超过 200MB"); break; }
-      try { added.push({ id: infoId(), type: "file", name: file.name.slice(0,200), mime: file.type || "application/octet-stream", size: file.size, dataUrl: await readFile(file) }); nextBytes += file.size; }
-      catch { onNotice(`${file.name} 读取失败`); }
-    }
-    if (incoming.length + currentFiles > 20) onNotice("每条资料最多保存 20 个文件");
-    if (!added.length) return;
-    if (point) placeCaretFromPoint(point.x, point.y);
-    for (const block of added) document.execCommand("insertHTML", false, attachmentHtml(block));
-    const clean = sanitizeDocumentHtml(editor.current.innerHTML);
-    onUpdate((current) => { const nextBlocks = [...current.blocks.filter((block) => block.type === "file"), ...added]; return { ...current, documentHtml: clean, blocks: nextBlocks, title: current.titleAuto !== false ? deriveDocumentTitle(clean, nextBlocks) : current.title, updatedAt: Date.now() }; });
-  }
-  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
-    const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void addFiles(files); return; }
-    const text = event.clipboardData.getData("text/plain"); const selection = window.getSelection(); const url = safeUrl(text);
-    event.preventDefault();
-    if (url && selection && !selection.isCollapsed) document.execCommand("createLink", false, url);
-    else if (url) document.execCommand("insertHTML", false, linkifyPlainText(text));
-    else document.execCommand("insertText", false, text.slice(0, Math.max(0, 30000 - htmlText(editor.current?.innerHTML || "").length)));
-    saveDocument();
-  }
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if ((event.key === "Backspace" || event.key === "Delete") && selectedFile) { event.preventDefault(); editor.current?.querySelector(`[data-file-id="${CSS.escape(selectedFile)}"]`)?.remove(); setSelectedFile(null); saveDocument(); return; }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") { event.preventDefault(); command("bold"); }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "i") { event.preventDefault(); command("italic"); }
-    const cell = (event.target as Element).closest<HTMLTableCellElement>("td,th");
-    if (event.key === "Tab" && cell) { event.preventDefault(); const cells = Array.from(cell.closest("table")?.querySelectorAll<HTMLElement>("td,th") || []); const next = cells[cells.indexOf(cell) + (event.shiftKey ? -1 : 1)]; if (next) placeCaretInside(next); else if (!event.shiftKey) { editTable("row-add"); const updated = Array.from(cell.closest("table")?.querySelectorAll<HTMLElement>("td,th") || []); placeCaretInside(updated.at(-1)); } }
-  }
-  function insertTable() { command("insertHTML", tableHtml(2,2)); }
-  function editTable(action: "row-add"|"row-remove"|"column-add"|"column-remove") {
-    const selection = window.getSelection(); const anchor = selection?.anchorNode instanceof Element ? selection.anchorNode : selection?.anchorNode?.parentElement;
-    const cell = anchor?.closest<HTMLTableCellElement>("td,th"); const row = cell?.parentElement; const table = cell?.closest("table"); if (!cell || !row || !table) { onNotice("请先把光标放进表格"); return; }
-    if (action === "row-add") { const next = row.cloneNode(true) as HTMLTableRowElement; next.querySelectorAll("td,th").forEach((value) => value.innerHTML = "<br>"); row.after(next); }
-    if (action === "row-remove") { if (table.rows.length <= 1) { onNotice("表格至少保留一行"); return; } row.remove(); }
-    if (action === "column-add") Array.from(table.rows).forEach((value) => value.insertCell(cell.cellIndex + 1).innerHTML = "<br>");
-    if (action === "column-remove") { if ((row as HTMLTableRowElement).cells.length <= 1) { onNotice("表格至少保留一列"); return; } Array.from(table.rows).forEach((value) => value.deleteCell(cell.cellIndex)); }
-    saveDocument();
-  }
-  return <section className="resource-workspace"><header><button className="workspace-back" onClick={onClose}>← 返回总览</button><select value={item.sectionId} onChange={(event) => onUpdate((current) => ({ ...current, sectionId: event.target.value, updatedAt: Date.now() }))}>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select><span className={`workspace-save ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="workspace-danger" onClick={onDelete}>删除</button><button className="workspace-close" onClick={onClose} aria-label="关闭">×</button></header><div className="workspace-title"><input value={item.title} maxLength={200} onChange={(event) => onUpdate((current) => ({ ...current, title: event.target.value.slice(0,200), titleAuto: false, updatedAt: Date.now() }))} aria-label="资料标题" /><span>{item.title.length}/200</span></div><div className="document-toolbar" aria-label="正文格式工具栏" onMouseDown={(event) => { if ((event.target as Element).closest("button")) event.preventDefault(); }}><select defaultValue="p" aria-label="文字样式" onChange={(event) => command("formatBlock", event.target.value)}><option value="p">正文</option><option value="h2">标题</option><option value="h3">副标题</option></select><button onClick={() => command("bold")} aria-label="加粗"><b>B</b></button><button onClick={() => command("italic")} aria-label="斜体"><i>I</i></button><button onClick={() => command("insertUnorderedList")} aria-label="项目符号列表">• 列表</button><button onClick={() => command("insertOrderedList")} aria-label="编号列表">1. 列表</button><button onClick={() => command("insertHTML", '<ul><li data-checked="false">待办事项</li></ul><p><br></p>')} aria-label="待办列表">☐ 待办</button><button onClick={insertTable} aria-label="插入表格">▦ 表格</button><button onClick={() => editTable("row-add")} aria-label="添加表格行">行＋</button><button onClick={() => editTable("row-remove")} aria-label="删除表格行">行－</button><button onClick={() => editTable("column-add")} aria-label="添加表格列">列＋</button><button onClick={() => editTable("column-remove")} aria-label="删除表格列">列－</button><button onClick={() => fileInput.current?.click()} aria-label="添加附件">⌕ 附件</button><span className="toolbar-spacer"/><button onClick={() => command("undo")} aria-label="撤销">↶</button><button onClick={() => command("redo")} aria-label="重做">↷</button><input ref={fileInput} hidden multiple type="file" onChange={(event) => { void addFiles(event.target.files); event.currentTarget.value = ""; }} /></div><div className="document-shell" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); void addFiles(event.dataTransfer.files, { x: event.clientX, y: event.clientY }); }}><div ref={editor} className="document-editor" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="资料正文" data-placeholder="输入文字，或将文件拖到这里…" dangerouslySetInnerHTML={{ __html: initialHtml }} onBeforeInput={(event) => { if (event.nativeEvent.inputType.startsWith("insert") && htmlText(editor.current?.innerHTML || "").length >= 30000) { event.preventDefault(); onNotice("正文最多 30000 字"); } }} onInput={saveDocument} onBlur={() => { if (editor.current && linkifyTextNodes(editor.current)) saveDocument(); }} onPaste={handlePaste} onKeyDown={handleKeyDown} onClick={(event) => { const target = event.target as Element; const checklist = target.closest<HTMLElement>("li[data-checked]"); if (checklist && event.nativeEvent.offsetX < 26) { checklist.dataset.checked = checklist.dataset.checked === "true" ? "false" : "true"; saveDocument(); return; } const anchor = target.closest<HTMLAnchorElement>("a"); if (anchor && (event.metaKey || event.ctrlKey)) { event.preventDefault(); window.open(anchor.href,"_blank","noopener,noreferrer"); return; } const figure = target.closest<HTMLElement>("[data-file-id]"); editor.current?.querySelectorAll("figure.selected").forEach((node) => node.classList.remove("selected")); figure?.classList.add("selected"); setSelectedFile(figure?.dataset.fileId || null); if (event.detail === 2 && figure?.dataset.fileId) { const file = item.blocks.find((block): block is Extract<InfoBlock,{type:"file"}> => block.type === "file" && block.id === figure.dataset.fileId); if (file?.mime.startsWith("image/")) setPreviewFile(file); else if (file) downloadFile(file); } }} /></div><footer className="document-status"><span>{htmlText(item.documentHtml || initialHtml).length} / 30000</span><span>自动保存 · 支持拖入或选择附件</span></footer>{previewFile && <div className="document-preview" role="dialog" aria-modal="true" aria-label={`预览${previewFile.name}`} onClick={() => setPreviewFile(null)}><button aria-label="关闭预览">×</button><img src={previewFile.dataUrl} alt={previewFile.name} /></div>}</section>;
-}
-
-function attachmentHtml(block: Extract<InfoBlock,{type:"file"}>) {
-  const name = block.name.replace(/[&<>"']/g, (value) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[value] || value));
-  const visual = block.mime.startsWith("image/") ? `<img src="${block.dataUrl}" alt="${name}">` : `<span class="document-file-icon">${block.mime === "application/pdf" ? "PDF" : "FILE"}</span>`;
-  return `<figure data-file-id="${block.id}" contenteditable="false">${visual}<figcaption><strong>${name}</strong><small>${formatBytes(block.size)}</small></figcaption></figure><p><br></p>`;
-}
-function enrichDocumentHtml(html: string, blocks: InfoBlock[]) {
-  return html.replace(/<figure\b[^>]*data-file-id="([^"]+)"[^>]*>[\s\S]*?<\/figure>/gi, (whole, id: string) => {
-    const block = blocks.find((value): value is Extract<InfoBlock,{type:"file"}> => value.type === "file" && value.id === id);
-    return block ? attachmentHtml(block).replace(/<p><br><\/p>$/, "") : "";
-  });
-}
-function linkifyTextNodes(root: HTMLElement) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const nodes: Text[] = []; let node: Node | null;
-  while ((node = walker.nextNode())) if (node.parentElement && !node.parentElement.closest("a,figure")) nodes.push(node as Text);
-  let changed = false;
-  nodes.forEach((text) => { if (!/(?:https?:\/\/|www\.)[^\s<>]+/i.test(text.data)) return; const holder = document.createElement("span"); holder.innerHTML = linkifyPlainText(text.data); text.replaceWith(...Array.from(holder.childNodes)); changed = true; });
-  return changed;
-}
-function placeCaretInside(node?: HTMLElement) { if (!node) return; const range = document.createRange(); range.selectNodeContents(node); range.collapse(true); const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range); }
-function downloadFile(block: Extract<InfoBlock,{type:"file"}>) { const anchor = document.createElement("a"); anchor.href = block.dataUrl; anchor.download = block.name; anchor.click(); }
-function placeCaretFromPoint(x: number, y: number) {
-  const documentWithCaret = document as Document & { caretRangeFromPoint?: (x:number,y:number)=>Range; caretPositionFromPoint?: (x:number,y:number)=>CaretPosition | null };
-  const range = documentWithCaret.caretRangeFromPoint?.(x,y);
-  const position = documentWithCaret.caretPositionFromPoint?.(x,y);
-  const selection = window.getSelection(); if (!selection) return;
-  selection.removeAllRanges();
-  if (range) selection.addRange(range);
-  else if (position) { const next = document.createRange(); next.setStart(position.offsetNode, position.offset); next.collapse(true); selection.addRange(next); }
+  return <section className="resource-workspace"><header><button className="workspace-back" onClick={onClose}>← 返回总览</button><select value={item.sectionId} onChange={(event) => onUpdate((current) => ({ ...current, sectionId: event.target.value, updatedAt: Date.now() }))}>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select><span className={`workspace-save ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="workspace-danger" onClick={onDelete}>删除</button><button className="workspace-close" onClick={onClose} aria-label="关闭">×</button></header><div className="workspace-title"><input value={item.title} maxLength={200} onChange={(event) => onUpdate((current) => ({ ...current, title: event.target.value.slice(0, 200), titleAuto: false, updatedAt: Date.now() }))} aria-label="资料标题" /><span>{item.title.length}/200</span></div><InformationEditor item={item} fileBytes={fileBytes} onUpdate={onUpdate} onNotice={onNotice} /></section>;
 }
 function SystemDialog({ onSave, onClose }: { onSave: (name:string,url:string,meta:Awaited<ReturnType<typeof fetchSiteMetadata>>)=>Promise<void>; onClose:()=>void }) { const [url,setUrl]=useState(""); const [name,setName]=useState(""); const [nameEdited,setNameEdited]=useState(false); const [loading,setLoading]=useState(false); const [meta,setMeta]=useState<Awaited<ReturnType<typeof fetchSiteMetadata>>>(null); const recognition=useRef<Promise<Awaited<ReturnType<typeof fetchSiteMetadata>>>|null>(null); async function recognize(){const normalized=safeUrl(url); if(!normalized)return null; if(recognition.current)return recognition.current; setLoading(true); recognition.current=fetchSiteMetadata(normalized); try{const next=await recognition.current; setMeta(next); if(!nameEdited)setName(next?.title||urlMeta(normalized)?.name||""); return next;}finally{recognition.current=null;setLoading(false);}} async function submit(){ if(!safeUrl(url))return; const next=meta||await recognize(); const finalName=(name||next?.title||urlMeta(url)?.name||"").trim(); if(!finalName)return; await onSave(finalName,url,next); } return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="新增常用链接"><button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button><h2>新增常用链接</h2><div className="dialog-fields"><label className="dialog-field"><span>网址</span><input autoFocus value={url} onChange={(event)=>{setUrl(event.target.value);setMeta(null);}} onBlur={()=>void recognize()} placeholder="https://example.com" /></label><label className="dialog-field"><span>名称</span><input value={name} maxLength={200} onChange={(event)=>{setName(event.target.value);setNameEdited(true);}} placeholder={loading?"正在识别网站名称…":"自动填充，可修改"} /></label></div><footer><button onClick={onClose}>取消</button><button className="primary" disabled={!safeUrl(url)} onClick={()=>void submit()}>{loading?"识别中…":"添加"}</button></footer></section></div>; }
 function SystemEditDialog({ item, onSave, onClose }: { item:SystemItem; onSave:(name:string,url:string)=>boolean; onClose:()=>void }) { const target=item.links.find((link)=>link.id===item.defaultLinkId)||item.links[0]; const [name,setName]=useState(item.name); const [url,setUrl]=useState(target.url); return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="编辑常用链接"><button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button><h2>编辑常用链接</h2><div className="dialog-fields"><label className="dialog-field"><span>名称</span><input autoFocus value={name} maxLength={200} onChange={(event)=>setName(event.target.value)} /></label><label className="dialog-field"><span>网址</span><input value={url} onChange={(event)=>setUrl(event.target.value)} /></label></div><footer><button onClick={onClose}>取消</button><button className="primary" disabled={!name.trim()||!safeUrl(url)} onClick={()=>onSave(name,url)}>保存</button></footer></section></div>; }
 async function fetchSiteMetadata(url:string){ try{const response=await fetch("/api/site-metadata",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})}); if(!response.ok)return null; return await response.json() as {title:string;icon:string;finalUrl:string};}catch{return null;} }
-function readFile(file: File) { return new Promise<string>((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result)); reader.onerror=()=>reject(reader.error); reader.readAsDataURL(file); }); }
-function formatBytes(size:number) { return size < 1024 ? `${size} B` : size < 1048576 ? `${(size/1024).toFixed(1)} KB` : `${(size/1048576).toFixed(1)} MB`; }

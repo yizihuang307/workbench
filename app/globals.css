@@ -383,6 +383,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .document-preview { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 40px; background: rgba(12,15,28,.82); }
 .document-preview button { position: absolute; top: 18px; right: 18px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: white; font-size: 24px; }
 .document-preview img { max-width: 94vw; max-height: 90vh; object-fit: contain; }
+.tiptap-shell { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.tiptap-toolbar { position: sticky; z-index: 8; top: 60px; display: flex; align-items: center; gap: 3px; padding: 7px 24px; border-block: 1px solid var(--line); background: rgba(255,255,255,.88); backdrop-filter: blur(18px); }
+.tiptap-toolbar button, .tiptap-toolbar select { min-width: 32px; height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--violet-12); font-size: 13px; }
+.tiptap-toolbar button:hover, .tiptap-toolbar button.active, .tiptap-toolbar select:hover { background: var(--violet-3); color: var(--violet-11); }
+.tiptap-toolbar button[aria-label="加粗"] { font-weight: 800; }
+.tiptap-toolbar button[aria-label="斜体"] { font-family: Georgia,serif; font-style: italic; }
+.tiptap-toolbar > i { width: 1px; height: 18px; margin: 0 4px; background: var(--line); }
+.tiptap-toolbar > span { flex: 1; }
+.tiptap-page { position: relative; min-height: 0; flex: 1; overflow-y: auto; padding: 30px max(24px,7%); }
+.tiptap-document { min-height: 58vh; max-width: 880px; margin: 0 auto; outline: 0; color: var(--ink); font-size: 17px; line-height: 1.75; overflow-wrap: anywhere; cursor: text; }
+.tiptap-document p { min-height: 1.75em; margin: .4em 0; }
+.tiptap-document p.is-editor-empty:first-child::before { content: "输入文字，粘贴链接，或拖入图片和附件…"; height: 0; float: left; color: var(--muted); pointer-events: none; }
+.tiptap-document h2 { margin: 1.15em 0 .4em; font-size: 1.55em; line-height: 1.3; }
+.tiptap-document h3 { margin: 1em 0 .35em; font-size: 1.2em; line-height: 1.4; }
+.tiptap-document ul, .tiptap-document ol { margin: .55em 0; padding-left: 1.45em; }
+.tiptap-document ul[data-type="taskList"] { padding-left: 0; list-style: none; }
+.tiptap-document ul[data-type="taskList"] li { display: flex; gap: 8px; align-items: flex-start; }
+.tiptap-document ul[data-type="taskList"] li > label { padding-top: 3px; }
+.tiptap-document ul[data-type="taskList"] li > label input { width: 16px; height: 16px; accent-color: var(--violet-9); }
+.tiptap-document ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+.tiptap-document ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--muted); text-decoration: line-through; }
+.tiptap-document a { color: var(--cobalt); text-decoration: underline; text-underline-offset: 3px; }
+.tiptap-document .tableWrapper { margin: 16px 0; overflow-x: auto; }
+.tiptap-document table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tiptap-document td, .tiptap-document th { position: relative; min-width: 120px; padding: 8px 10px; border: 1px solid var(--line); vertical-align: top; }
+.tiptap-document .selectedCell::after { content: ""; position: absolute; inset: 0; background: rgba(91,91,214,.09); pointer-events: none; }
+.tiptap-document .column-resize-handle { position: absolute; z-index: 2; top: 0; right: -2px; bottom: 0; width: 4px; background: var(--violet-7); pointer-events: none; }
+.table-context { position: sticky; z-index: 6; right: 16px; bottom: 18px; width: max-content; display: flex; gap: 2px; margin: -42px 0 0 auto; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.96); box-shadow: 0 10px 30px rgba(30,25,55,.12); }
+.table-context button { height: 30px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; }
+.table-context button:hover { background: var(--violet-3); color: var(--violet-11); }
+.tiptap-image { position: relative; max-width: 100%; margin: 14px 0; border: 1px solid transparent; border-radius: 12px; }
+.tiptap-image img { display: block; width: 100%; max-height: 640px; border-radius: 10px; object-fit: contain; cursor: zoom-in; }
+.tiptap-image.selected { border-color: var(--violet-9); box-shadow: 0 0 0 3px rgba(91,91,214,.14); }
+.image-resize-handle { position: absolute; right: -7px; bottom: -7px; width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; background: var(--violet-9); box-shadow: 0 2px 7px rgba(30,25,55,.25); cursor: nwse-resize; }
+.tiptap-attachment { width: min(100%,620px); display: flex; align-items: center; gap: 11px; margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.76); cursor: default; }
+.tiptap-attachment.selected { border-color: var(--violet-9); box-shadow: 0 0 0 3px rgba(91,91,214,.12); }
+.tiptap-attachment > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 9px; background: var(--violet-3); color: var(--violet-11); font-size: 10px; font-weight: 750; }
+.tiptap-attachment > div { min-width: 0; display: flex; flex-direction: column; }
+.tiptap-attachment strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tiptap-attachment small { color: var(--muted); }
+.tiptap-status { display: flex; justify-content: space-between; gap: 12px; padding: 8px 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.editor-loading { flex: 1; display: grid; place-items: center; color: var(--muted); }
 .workspace-actions { display: flex; gap: 7px; padding: 9px 24px 14px; border-bottom: 1px solid var(--line); }
 .workspace-actions button { min-height: 40px; padding: 0 12px; border: 1px solid var(--cobalt); background: white; color: var(--cobalt); }
 .block-editor { flex: 1; padding: 12px 24px 90px; }
@@ -433,6 +475,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .document-shell { padding: 16px; }
   .document-editor { min-height: 54vh; font-size: 16px; }
   .document-status { padding-inline: 14px; }
+  .tiptap-toolbar { top: 100px; padding-inline: 12px; overflow-x: auto; }
+  .tiptap-page { padding: 20px 16px; }
+  .tiptap-document { min-height: 54vh; font-size: 16px; }
+  .tiptap-status { padding-inline: 14px; }
   .workspace-title input { font-size: 20px; }
   .info-block { grid-template-columns: 20px minmax(0,1fr); }
   .block-actions { grid-column: 2; justify-content: flex-end; }

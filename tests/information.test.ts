@@ -129,11 +129,13 @@ test("corrupted oversized rich text is recovered at the product limit", () => {
   assert.equal(htmlText(parsed?.resources[0].documentHtml || "").length, DOCUMENT_LIMIT);
 });
 
-test("sanitizer preserves multilingual text, emoji, check state and attachment references", () => {
-  const html = sanitizeDocumentHtml('<p>中文 English 日本語 🚀</p><ul><li data-checked="false">待办</li><li data-checked="true">完成</li></ul><figure data-file-id="f"><img src="data:image/png;base64,evil"></figure>');
+test("sanitizer preserves multilingual text, emoji, task structure and attachment references", () => {
+  const html = sanitizeDocumentHtml('<p>中文 English 日本語 🚀</p><ul data-type="taskList"><li data-type="taskItem" data-checked="false">待办</li><li data-type="taskItem" data-checked="true">完成</li></ul><figure data-file-id="f"><img src="data:image/png;base64,evil"></figure>');
   assert.match(html, /中文 English 日本語 🚀/);
   assert.match(html, /data-checked="false"/);
   assert.match(html, /data-checked="true"/);
+  assert.match(html, /data-type="taskList"/);
+  assert.match(html, /data-type="taskItem"/);
   assert.match(html, /data-file-id="f"/);
   assert.doesNotMatch(html, /base64|src=/);
 });

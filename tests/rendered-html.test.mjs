@@ -153,23 +153,35 @@ test("desktop information controls use the compact size system", async () => {
 });
 
 test("information detail is one accessible document editor with complete core controls", async () => {
-  const [view, model, css] = await Promise.all([
+  const [view, editor, model, css] = await Promise.all([
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-editor.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information.ts", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
-  assert.match(view, /contentEditable[^>]*role="textbox"[^>]*aria-multiline="true"/);
-  for (const label of ["文字样式", "加粗", "斜体", "项目符号列表", "编号列表", "待办列表", "插入表格", "添加附件", "撤销", "重做"]) assert.match(view, new RegExp(`aria-label="${label}"`));
-  assert.match(view, /onPaste=\{handlePaste\}/);
-  assert.match(view, /onDrop=.*addFiles/s);
-  assert.match(view, /event\.key === "Backspace" \|\| event\.key === "Delete"/);
-  assert.match(view, /setPreviewFile\(file\)/);
-  assert.match(view, /editTable\("row-add"\)/);
-  assert.match(view, /editTable\("column-remove"\)/);
+  assert.match(view, /<InformationEditor/);
+  assert.match(editor, /useEditor\(\{/);
+  assert.match(editor, /immediatelyRender: false/);
+  assert.match(editor, /attributes: \{ class: "tiptap-document", "aria-label": "资料正文" \}/);
+  for (const label of ["文字样式", "加粗", "斜体", "项目符号", "编号", "待办", "表格", "附件", "撤销", "重做"]) assert.match(editor, new RegExp(`(?:aria-label=|action\\()"${label}"`));
+  assert.match(editor, /handlePaste\(view, event\)/);
+  assert.match(editor, /handleDrop\(view, event\)/);
+  assert.match(editor, /input[^>]*multiple type="file"/);
+  assert.match(editor, /TaskItem\.configure\(\{ nested: true \}\)/);
+  assert.match(editor, /TableKit\.configure/);
+  assert.match(editor, /tableActive && <div className="table-context"/);
+  assert.match(editor, /addRowAfter\(\)/);
+  assert.match(editor, /deleteColumn\(\)/);
+  assert.match(editor, /resourceImage/);
+  assert.match(editor, /image-resize-handle/);
+  assert.match(editor, /resource-image-preview/);
+  assert.match(editor, /resourceAttachment/);
+  assert.doesNotMatch(editor, /document\.execCommand/);
   assert.match(model, /sanitizeDocumentHtml/);
   assert.match(model, /linkifyPlainText/);
-  assert.match(css, /\.document-editor a \{[^}]*text-decoration: underline/);
-  assert.match(css, /\.document-editor table \{[^}]*overflow-x: auto/);
+  assert.match(css, /\.tiptap-document a \{[^}]*text-decoration: underline/);
+  assert.match(css, /\.tiptap-document \.tableWrapper \{[^}]*overflow-x: auto/);
+  assert.match(css, /\.image-resize-handle/);
 });
 
 test("record and information filter tabs use restrained color markers", async () => {
