@@ -103,7 +103,7 @@ test("record count and AI action share the editor header", async () => {
   assert.doesNotMatch(view, /<footer><span>\{selected\.body\.length\}/);
 });
 
-test("modern violet design system and emoji navigation stay in place", async () => {
+test("modern violet design system and active navigation stay in place", async () => {
   const [page, css] = await Promise.all([
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
@@ -111,7 +111,10 @@ test("modern violet design system and emoji navigation stay in place", async () 
   assert.match(page, /<span aria-hidden>📅<\/span>安排/);
   assert.match(page, /<span aria-hidden>📝<\/span>记录/);
   assert.match(page, /<span aria-hidden>🔖<\/span>信息/);
-  assert.match(page, /<span aria-hidden>🌤️<\/span>心情/);
+  assert.doesNotMatch(page, /<span aria-hidden>🌤️<\/span>心情/);
+  assert.doesNotMatch(page, /<div className="mood-block">/);
+  assert.match(page, /心情模块暂时隐藏/);
+  assert.match(css, /\.sidebar nav \{ grid-template-columns: repeat\(3,1fr\);/);
   assert.match(css, /--violet-9:\s*#5b5bd6/);
   assert.match(css, /--amber-9:\s*#ffc53d/);
   assert.match(css, /--success-9:\s*#30a46c/);

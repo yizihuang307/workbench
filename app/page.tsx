@@ -293,7 +293,7 @@ export default function Home() {
         <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span aria-hidden>📅</span>安排</button>
         <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span aria-hidden>📝</span>记录</button>
         <button className={activePage === "information" ? "active" : ""} onClick={() => setActivePage("information")}><span aria-hidden>🔖</span>信息</button>
-        <button onClick={() => document.getElementById("mood")?.focus()}><span aria-hidden>🌤️</span>心情</button>
+        {/* 心情模块暂时隐藏：恢复时重新启用导航入口。 */}
       </nav>
     </aside>
 
@@ -302,7 +302,7 @@ export default function Home() {
         <header className="hero">
           <div className="hero-intro"><p>{dateLabel}</p><h1>今天，先完成真正重要的事。</h1></div>
           <div className="hero-tools">
-            <div className="mood-block"><small>此刻感觉怎么样？</small><Mood value={store.mood} onChange={(mood) => setStore((current) => ({ ...current, mood }))} /></div>
+            {/* 心情模块暂时隐藏：保留 Mood 组件与本地数据，便于后续恢复。 */}
             <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
           </div>
         </header>
@@ -413,9 +413,11 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
   </article>;
 }
 
+/* 心情模块暂时隐藏，恢复模块时取消此处注释。
 function Mood({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return <div id="mood" className="moods" tabIndex={-1}>{["很累", "一般", "平静", "不错", "很好"].map((label, index) => <button key={label} className={`mood-${index} ${value === index ? "active" : ""}`} onClick={() => onChange(index)} aria-label={`心情：${label}`} aria-pressed={value === index}><span className="mood-face" aria-hidden><i /><b /></span></button>)}</div>;
 }
+*/
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
