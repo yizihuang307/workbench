@@ -187,6 +187,7 @@ test("information detail is one accessible document editor with complete core co
   assert.match(css, /\.tiptap-document ol \{ list-style-type: decimal/);
   assert.match(css, /\.tiptap-document \{ width: 100%; min-height: 58vh/);
   assert.match(css, /grid-template-columns: 20px minmax\(0,1fr\)/);
+  assert.match(css, /li > div > p \{ min-height: 1\.75em; margin: 0; \}/);
   assert.match(css, /\.tiptap-document \.tableWrapper \{[^}]*overflow-x: auto/);
   assert.match(css, /\.image-resize-handle/);
 });

@@ -408,6 +408,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .tiptap-document ul[data-type="taskList"] li > label { height: 1.75em; display: flex; align-items: center; justify-content: center; }
 .tiptap-document ul[data-type="taskList"] li > label input { width: 16px; height: 16px; margin: 0; accent-color: var(--violet-9); }
 .tiptap-document ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+.tiptap-document ul[data-type="taskList"] li > div > p { min-height: 1.75em; margin: 0; }
 .tiptap-document ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--muted); text-decoration: line-through; }
 .tiptap-document a { color: var(--cobalt); text-decoration: underline; text-underline-offset: 3px; }
 .tiptap-document .tableWrapper { margin: 16px 0; overflow-x: auto; }
