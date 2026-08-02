@@ -192,3 +192,27 @@ test("desktop record list and editor scroll independently", async () => {
   assert.match(css, /\.record-browser, \.record-editor \{ min-height: 0; overflow: hidden; \}/);
   assert.match(css, /\.record-list, \.record-document-editor \{[\s\S]*overflow-y: auto;[\s\S]*overscroll-behavior: contain;/);
 });
+
+test("information management exposes complete edit and delete actions without clipped menus", async () => {
+  const [view, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(view, /aria-label="编辑常用链接"/);
+  assert.match(view, /编辑名称和网址/);
+  assert.match(view, /删除分区/);
+  assert.match(view, /deleteResourceSection/);
+  assert.match(css, /\.system-section\.menu-open \{[^}]*overflow: visible/);
+  assert.match(css, /\.system-section\.menu-open \{[^}]*z-index:/);
+});
+
+test("information search is a single direct input without a decorative outer box", async () => {
+  const [view, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(view, /<div className="info-search"><input/);
+  assert.doesNotMatch(view, /<label className="info-search"><span/);
+  assert.match(css, /\.info-search \{[^}]*border: 0/);
+  assert.match(css, /\.info-search input \{[^}]*border: 1px solid/);
+});

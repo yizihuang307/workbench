@@ -300,10 +300,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .info-index button, .info-manage { min-height: 44px; padding: 0 14px; border: 1px solid var(--cobalt); background: var(--paper); color: var(--ink); white-space: nowrap; }
 .info-index button:first-child { background: var(--cobalt); color: white; }
 .info-manage { border-color: var(--line); color: var(--cobalt); }
-.info-search { min-height: 48px; display: flex; align-items: center; gap: 9px; margin: 16px 0; padding: 0 14px; border: 1px solid var(--cobalt); background: white; }
-.info-search > span { color: var(--cobalt); font-size: 22px; }
-.info-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font-size: 14px; }
+.info-search { position: relative; min-height: 48px; display: flex; align-items: center; margin: 16px 0; padding: 0; border: 0; background: transparent; }
+.info-search input { min-width: 0; width: 100%; min-height: 48px; padding: 0 76px 0 14px; border: 1px solid var(--cobalt); outline: 0; background: white; font-size: 14px; }
 .info-search small { color: var(--muted); }
+.info-search small { position: absolute; right: 14px; }
 .system-section, .resource-section { scroll-margin-top: 16px; border: 1px solid var(--ink); background: var(--paper); }
 .system-section > header, .resource-section > header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .system-section h2, .resource-section h2 { display: inline; margin: 0; font-size: 18px; }
@@ -324,6 +324,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .system-menu button { min-height: 36px; padding: 0 8px; border: 0; background: transparent; text-align: left; }
 .system-menu button:hover { background: var(--sky); }
 .system-menu .danger { border-top: 1px solid var(--line); color: #a43b2c; }
+.system-section.menu-open { position: relative; z-index: 20; overflow: visible; }
 .resource-sections { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-top: 14px; }
 .resource-section { min-height: 352px; display: flex; flex-direction: column; }
 .resource-section.expanded { grid-column: 1/-1; }
@@ -404,14 +405,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .info-dialog { position: relative; width: min(680px,100%); max-height: calc(100vh - 44px); overflow: auto; padding: 28px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 9px 9px 0 rgba(0,0,0,.2); }
 .info-dialog.small { width: min(520px,100%); }
 .info-dialog h2 { margin: 0 0 18px; }
-.info-dialog p { color: var(--muted); }
+.info-dialog p { margin: 0 0 18px; color: var(--muted); }
 .info-dialog > input, .section-add input, .section-manage-row input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--cobalt); background: white; }
 .info-dialog-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border: 0; background: transparent; font-size: 20px; }
 .info-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .info-dialog footer button, .section-add button { min-height: 44px; padding: 0 14px; border: 1px solid var(--line); background: white; }
 .info-dialog footer .primary, .section-add button { border-color: var(--cobalt); background: var(--cobalt); color: white; }
-.section-add, .section-manage-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; margin: 8px 0; }
+.dialog-fields { display: grid; gap: 14px; }
+.dialog-field { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
+.dialog-field input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--cobalt); background: white; font-size: 14px; }
+.section-add, .section-manage-row { display: grid; gap: 8px; margin: 8px 0; }
+.section-add { grid-template-columns: minmax(0,1fr) auto; }
+.section-manage-row { grid-template-columns: minmax(0,1fr) auto auto; }
 .section-manage-row span { min-width: 64px; display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+.section-delete { min-height: 40px; padding: 0 11px; border: 1px solid var(--line); background: white; color: var(--tomato-11); }
 
 @media (max-width: 760px) {
   .info-page, .resource-workspace { width: calc(100% - 24px); }
@@ -667,6 +674,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .info-index button:first-child { border-color: var(--violet-9); background: var(--violet-9); }
 .info-manage { color: var(--violet-11); }
 .system-section, .resource-section { overflow: hidden; }
+.system-section.menu-open { overflow: visible; z-index: 20; }
 .system-section header, .resource-section header { border-color: var(--line); background: rgba(249,249,255,.66); }
 .system-section header button, .resource-section header button { border: 0; border-radius: 10px; background: linear-gradient(135deg, var(--violet-9), #796ae3); }
 .system-open:hover, .resource-row:hover { background: var(--violet-2); }
@@ -802,8 +810,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 9px;
   font-size: 13px;
 }
-.info-search { min-height: 40px; margin-block: 14px; padding-inline: 12px; }
-.info-search > span { font-size: 18px; }
+.info-search { min-height: 40px; margin-block: 14px; padding: 0; }
+.info-search input { min-height: 40px; }
 .system-section > header, .resource-section > header { min-height: 56px; padding-block: 8px; }
 .system-section header button, .resource-section header button {
   width: var(--control-compact);

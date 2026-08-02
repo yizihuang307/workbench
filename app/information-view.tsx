@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { deriveDocumentTitle, FILE_LIMIT, htmlText, infoId, legacyDocumentHtml, linkifyPlainText, safeUrl, sanitizeDocumentHtml, tableHtml, totalFileBytes, TOTAL_FILE_LIMIT, urlMeta, visibleResources, type InfoBlock, type InfoSection, type InfoStore, type ResourceItem } from "./information";
+import { deleteResourceSection, deriveDocumentTitle, FILE_LIMIT, htmlText, infoId, legacyDocumentHtml, linkifyPlainText, safeUrl, sanitizeDocumentHtml, tableHtml, totalFileBytes, TOTAL_FILE_LIMIT, updateSystemLink, urlMeta, visibleResources, visibleSystems, type InfoBlock, type InfoSection, type InfoStore, type ResourceItem, type SystemItem } from "./information";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -10,6 +10,7 @@ export default function InformationView({ store, setStore, storageError, onNotic
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newSystem, setNewSystem] = useState(false);
   const [systemMenuId, setSystemMenuId] = useState<string | null>(null);
+  const [editingSystemId, setEditingSystemId] = useState<string | null>(null);
   const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [draftSection, setDraftSection] = useState("");
@@ -21,6 +22,8 @@ export default function InformationView({ store, setStore, storageError, onNotic
   const systemSection = store.sections.find((section) => section.type === "systems");
   const editing = store.resources.find((item) => item.id === editingId) ?? null;
   const results = useMemo(() => visibleResources(store, "all", query), [store, query]);
+  const systemResults = useMemo(() => visibleSystems(store, query), [store, query]);
+  const editingSystem = store.systems.find((item) => item.id === editingSystemId) ?? null;
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
@@ -59,6 +62,15 @@ export default function InformationView({ store, setStore, storageError, onNotic
     if (!name || store.sections.some((section) => section.name === name)) { onNotice(name ? "分区名称不能重复" : "分区名称不能为空"); return; }
     setStore((current) => ({ ...current, sections: [...current.sections, { id: infoId(), name, type: "resources", order: current.sections.length, createdAt: Date.now() }] })); setDraftSection("");
   }
+  function removeSection(section: InfoSection) {
+    const target = resourceSections.find((item) => item.id !== section.id);
+    if (!target) { onNotice("至少需要保留一个资料分区"); return; }
+    const count = store.resources.filter((item) => item.sectionId === section.id).length;
+    if (!window.confirm(count ? `删除“${section.name}”后，其中 ${count} 项资料将移到“${target.name}”。是否继续？` : `确定删除空分区“${section.name}”吗？`)) return;
+    setStore((current) => deleteResourceSection(current, section.id, target.id) || current);
+    setExpandedSectionId((current) => current === section.id ? null : current);
+    onNotice(count ? `分区已删除，${count} 项资料已移到“${target.name}”` : "分区已删除");
+  }
 
   if (editing) return <ResourceWorkspace item={editing} sections={resourceSections} saveState={storageError ? "error" : saveState} fileBytes={totalFileBytes(store)} onClose={closeEditor} onDelete={() => deleteResource(editing)} onUpdate={(updater) => updateResource(editing.id, updater)} onNotice={onNotice} />;
 
@@ -67,14 +79,14 @@ export default function InformationView({ store, setStore, storageError, onNotic
       <div className="info-index" aria-label="分区索引">{store.sections.map((section) => <button key={section.id} onClick={() => document.getElementById(`info-${section.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{section.name}</button>)}</div>
       <button className="info-manage" onClick={() => setManageOpen(true)}>管理分区</button>
     </header>
-    <label className="info-search"><span aria-hidden>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索资料、链接或文件名" aria-label="搜索信息" /><small>{query ? `共 ${results.length} 项` : ""}</small></label>
+    <div className="info-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索资料、链接或文件名" aria-label="搜索信息" /><small>{query ? `共 ${results.length + systemResults.length} 项` : ""}</small></div>
 
-    {systemSection && <section className="system-section" id={`info-${systemSection.id}`}>
-      <header><div><h2>{systemSection.name}</h2><span>共 {store.systems.length} 项</span></div><button onClick={() => setNewSystem(true)} aria-label="新增常用链接">＋</button></header>
-      <div className="system-grid">{[...store.systems].sort((a,b) => a.order-b.order).map((item) => {
+    {systemSection && <section className={`system-section ${systemMenuId ? "menu-open" : ""}`} id={`info-${systemSection.id}`}>
+      <header><div><h2>{systemSection.name}</h2><span>共 {query ? systemResults.length : store.systems.length} 项</span></div><button onClick={() => setNewSystem(true)} aria-label="新增常用链接">＋</button></header>
+      <div className="system-grid">{systemResults.map((item) => {
         const target = item.links.find((link) => link.id === item.defaultLinkId) || item.links[0];
-        return <article className="system-row" key={item.id}><button className="system-open" onClick={() => window.open(target.url, "_blank", "noopener,noreferrer")} title={item.name}><b><i aria-hidden>{item.name.slice(0,1).toUpperCase()}</i>{/^https?:\/\//.test(item.icon) && <img src={item.icon} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} />}</b><span>{item.name}</span><small>{new URL(target.url).hostname}</small></button><button className="system-remove" aria-label={`操作${item.name}`} aria-expanded={systemMenuId === item.id} onClick={() => setSystemMenuId((current) => current === item.id ? null : item.id)}>···</button>{systemMenuId === item.id && <div className="system-menu" role="menu"><button onClick={() => { const name = window.prompt("编辑系统名称", item.name)?.trim().slice(0,200); if (name) setStore((current) => ({ ...current, systems: current.systems.map((system) => system.id === item.id ? { ...system, name, updatedAt: Date.now() } : system) })); setSystemMenuId(null); }}>编辑名称</button><button onClick={() => { setSystemMenuId(null); void refreshSystemMetadata(item.id, target.url, setStore, onNotice); }}>重新识别名称和 Logo</button><button className="danger" onClick={() => { setSystemMenuId(null); if (window.confirm(`确定删除“${item.name}”吗？`)) setStore((current) => ({ ...current, systems: current.systems.filter((system) => system.id !== item.id) })); }}>删除</button></div>}</article>;
-      })}{!store.systems.length && <div className="info-empty"><b>↗</b><span>粘贴网址，名称和图标会自动生成</span><button onClick={() => setNewSystem(true)}>添加第一个系统</button></div>}</div>
+        return <article className="system-row" key={item.id}><button className="system-open" onClick={() => window.open(target.url, "_blank", "noopener,noreferrer")} title={item.name}><b><i aria-hidden>{item.name.slice(0,1).toUpperCase()}</i>{/^https?:\/\//.test(item.icon) && <img src={item.icon} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} />}</b><span>{item.name}</span><small>{new URL(target.url).hostname}</small></button><button className="system-remove" aria-label={`操作${item.name}`} aria-expanded={systemMenuId === item.id} onClick={() => setSystemMenuId((current) => current === item.id ? null : item.id)}>···</button>{systemMenuId === item.id && <div className="system-menu" role="menu"><button onClick={() => { setSystemMenuId(null); setEditingSystemId(item.id); }}>编辑名称和网址</button><button onClick={() => { setSystemMenuId(null); void refreshSystemMetadata(item.id, target.url, setStore, onNotice); }}>重新识别名称和 Logo</button><button className="danger" onClick={() => { setSystemMenuId(null); if (window.confirm(`确定删除“${item.name}”吗？`)) setStore((current) => ({ ...current, systems: current.systems.filter((system) => system.id !== item.id) })); }}>删除</button></div>}</article>;
+      })}{!systemResults.length && <div className="info-empty"><b>↗</b><span>{query ? "没有匹配的常用链接" : "粘贴网址，名称和图标会自动生成"}</span>{!query && <button onClick={() => setNewSystem(true)}>添加第一个系统</button>}</div>}</div>
     </section>}
 
     <div className="resource-sections">{resourceSections.map((section) => {
@@ -91,7 +103,8 @@ export default function InformationView({ store, setStore, storageError, onNotic
       const now = Date.now(), linkId = infoId();
       setStore((current) => ({ ...current, systems: [...current.systems, { id: infoId(), sectionId: systemSection.id, name: remote?.title || meta.name, icon: remote?.icon || meta.icon, links: [{ id: linkId, url: remote?.finalUrl || meta.url, label: "主页" }], defaultLinkId: linkId, order: current.systems.length, createdAt: now, updatedAt: now }] })); setNewSystem(false); onNotice(remote ? "常用链接已添加" : "网站信息读取失败，已使用域名生成名称和图标");
     }} />}
-    {manageOpen && <div className="info-dialog-backdrop"><section className="info-dialog" role="dialog" aria-modal="true" aria-label="管理分区"><button className="info-dialog-close" onClick={() => setManageOpen(false)} aria-label="关闭">×</button><h2>管理分区</h2><div className="section-add"><input autoFocus value={draftSection} maxLength={40} onChange={(event) => setDraftSection(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSection()} placeholder="新分区名称" /><button onClick={addSection}>新增资料分区</button></div>{resourceSections.map((section) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span></div>)}</section></div>}
+    {editingSystem && <SystemEditDialog item={editingSystem} onClose={() => setEditingSystemId(null)} onSave={(name,url) => { const normalized = safeUrl(url); if (!normalized) { onNotice("请输入有效的 http/https 网址"); return false; } if (store.systems.some((item) => item.id !== editingSystem.id && item.links.some((link) => link.url === normalized))) { onNotice("这个网址已经存在"); return false; } setStore((current) => { const updated = updateSystemLink(current, editingSystem.id, name, normalized); if (!updated) return current; return { ...updated, systems: updated.systems.map((item) => item.id === editingSystem.id ? { ...item, icon: new URL(normalized).origin + "/favicon.ico" } : item) }; }); setEditingSystemId(null); onNotice("常用链接已更新"); return true; }} />}
+    {manageOpen && <div className="info-dialog-backdrop"><section className="info-dialog" role="dialog" aria-modal="true" aria-label="管理分区"><button className="info-dialog-close" onClick={() => setManageOpen(false)} aria-label="关闭">×</button><h2>管理分区</h2><div className="section-add"><input autoFocus value={draftSection} maxLength={40} onChange={(event) => setDraftSection(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSection()} placeholder="新分区名称" /><button onClick={addSection}>新增资料分区</button></div>{resourceSections.map((section) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span><button className="section-delete" onClick={() => removeSection(section)} disabled={resourceSections.length <= 1}>删除分区</button></div>)}</section></div>}
   </div>;
 }
 
@@ -190,7 +203,8 @@ function placeCaretFromPoint(x: number, y: number) {
   if (range) selection.addRange(range);
   else if (position) { const next = document.createRange(); next.setStart(position.offsetNode, position.offset); next.collapse(true); selection.addRange(next); }
 }
-function SystemDialog({ onSave, onClose }: { onSave: (value:string)=>Promise<void>; onClose:()=>void }) { const [value,setValue]=useState(""); const [loading,setLoading]=useState(false); async function submit(){ if(!safeUrl(value)||loading)return; setLoading(true); try{await onSave(value);}finally{setLoading(false);} } return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="新增常用链接"><button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button><h2>新增常用链接</h2><p>只需粘贴网址，名称和 Logo 会自动识别。</p><input autoFocus value={value} onChange={(event)=>setValue(event.target.value)} onKeyDown={(event)=>event.key==="Enter"&&void submit()} placeholder="https://example.com" /><footer><button onClick={onClose}>取消</button><button className="primary" disabled={!safeUrl(value)||loading} onClick={()=>void submit()}>{loading?"识别中…":"添加"}</button></footer></section></div>; }
+function SystemDialog({ onSave, onClose }: { onSave: (value:string)=>Promise<void>; onClose:()=>void }) { const [value,setValue]=useState(""); const [loading,setLoading]=useState(false); async function submit(){ if(!safeUrl(value)||loading)return; setLoading(true); try{await onSave(value);}finally{setLoading(false);} } return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="新增常用链接"><button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button><h2>新增常用链接</h2><p>粘贴网址后，将自动识别网站名称和 Logo。</p><label className="dialog-field"><span>网址</span><input autoFocus value={value} onChange={(event)=>setValue(event.target.value)} onKeyDown={(event)=>event.key==="Enter"&&void submit()} placeholder="https://example.com" /></label><footer><button onClick={onClose}>取消</button><button className="primary" disabled={!safeUrl(value)||loading} onClick={()=>void submit()}>{loading?"识别中…":"添加"}</button></footer></section></div>; }
+function SystemEditDialog({ item, onSave, onClose }: { item:SystemItem; onSave:(name:string,url:string)=>boolean; onClose:()=>void }) { const target=item.links.find((link)=>link.id===item.defaultLinkId)||item.links[0]; const [name,setName]=useState(item.name); const [url,setUrl]=useState(target.url); return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="编辑常用链接"><button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button><h2>编辑常用链接</h2><div className="dialog-fields"><label className="dialog-field"><span>名称</span><input autoFocus value={name} maxLength={200} onChange={(event)=>setName(event.target.value)} /></label><label className="dialog-field"><span>网址</span><input value={url} onChange={(event)=>setUrl(event.target.value)} /></label></div><footer><button onClick={onClose}>取消</button><button className="primary" disabled={!name.trim()||!safeUrl(url)} onClick={()=>onSave(name,url)}>保存</button></footer></section></div>; }
 async function fetchSiteMetadata(url:string){ try{const response=await fetch("/api/site-metadata",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})}); if(!response.ok)return null; return await response.json() as {title:string;icon:string;finalUrl:string};}catch{return null;} }
 async function refreshSystemMetadata(id:string,url:string,setStore:React.Dispatch<React.SetStateAction<InfoStore>>,onNotice:(message:string)=>void){ const meta=await fetchSiteMetadata(url); if(!meta){onNotice("网站名称和 Logo 识别失败");return;} setStore((current)=>({...current,systems:current.systems.map((item)=>item.id===id?{...item,name:meta.title,icon:meta.icon,updatedAt:Date.now()}:item)})); onNotice("名称和 Logo 已更新"); }
 function readFile(file: File) { return new Promise<string>((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result)); reader.onerror=()=>reject(reader.error); reader.readAsDataURL(file); }); }

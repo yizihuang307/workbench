@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dataUrlBytes, deriveTitle, DOCUMENT_LIMIT, emptyInfoStore, FILE_LIMIT, htmlText, legacyDocumentHtml, linkifyPlainText, parseInfoStore, safeUrl, sanitizeDocumentHtml, tableHtml, totalFileBytes, urlMeta, visibleResources } from "../app/information";
+import { dataUrlBytes, deleteResourceSection, deriveTitle, DOCUMENT_LIMIT, emptyInfoStore, FILE_LIMIT, htmlText, legacyDocumentHtml, linkifyPlainText, parseInfoStore, safeUrl, sanitizeDocumentHtml, tableHtml, totalFileBytes, updateSystemLink, urlMeta, visibleResources, visibleSystems } from "../app/information";
 
 test("unsafe and malformed links are rejected", () => {
   assert.equal(safeUrl("javascript:alert(1)"), null);
@@ -147,4 +147,36 @@ test("file recovery verifies encoded size and enforces the 20 attachment boundar
     { id: "work", name: "工作资料", type: "resources", order: 1 },
   ], systems: [], resources: [{ id: "r", sectionId: "work", title: "附件", blocks: files, createdAt: 1, updatedAt: 1 }] }));
   assert.equal(parsed?.resources[0].blocks.length, 20);
+});
+
+test("system icon URL survives storage parsing", () => {
+  const store = emptyInfoStore(1);
+  store.systems = [{ id: "s", sectionId: "systems", name: "示例", icon: "https://example.com/favicon.ico", links: [{ id: "l", url: "https://example.com/", label: "主页" }], defaultLinkId: "l", order: 0, createdAt: 1, updatedAt: 1 }];
+  assert.equal(parseInfoStore(JSON.stringify(store))?.systems[0].icon, "https://example.com/favicon.ico");
+});
+
+test("information search includes common link names, domains and URLs", () => {
+  const store = emptyInfoStore(1);
+  store.systems = [{ id: "s", sectionId: "systems", name: "企业微信文档", icon: "企", links: [{ id: "l", url: "https://docs.example.com/work", label: "主页" }], defaultLinkId: "l", order: 0, createdAt: 1, updatedAt: 1 }];
+  assert.deepEqual(visibleSystems(store, "微信").map((item) => item.id), ["s"]);
+  assert.deepEqual(visibleSystems(store, "example.com").map((item) => item.id), ["s"]);
+  assert.equal(visibleSystems(store, "不存在").length, 0);
+});
+
+test("editing a common link updates both name and URL safely", () => {
+  const store = emptyInfoStore(1);
+  store.systems = [{ id: "s", sectionId: "systems", name: "旧名称", icon: "旧", links: [{ id: "l", url: "https://old.example/", label: "主页" }], defaultLinkId: "l", order: 0, createdAt: 1, updatedAt: 1 }];
+  const updated = updateSystemLink(store, "s", "新名称", "new.example/path", 2);
+  assert.equal(updated?.systems[0].name, "新名称");
+  assert.equal(updated?.systems[0].links[0].url, "https://new.example/path");
+  assert.equal(updateSystemLink(store, "s", "", "javascript:alert(1)", 2), null);
+});
+
+test("deleting a resource section migrates its resources and refuses deleting the last section", () => {
+  const store = emptyInfoStore(1);
+  store.resources = [{ id: "r", sectionId: "learning", title: "资料", blocks: [{ id: "t", type: "text", text: "正文" }], pinned: false, createdAt: 1, updatedAt: 1 }];
+  const deleted = deleteResourceSection(store, "learning", "work");
+  assert.equal(deleted?.sections.some((section) => section.id === "learning"), false);
+  assert.equal(deleted?.resources[0].sectionId, "work");
+  assert.equal(deleteResourceSection(deleted!, "work", "work"), null);
 });

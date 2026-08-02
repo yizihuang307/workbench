@@ -140,6 +140,30 @@ export function visibleResources(store: InfoStore, sectionId: string, query: str
   }).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
 }
 
+export function visibleSystems(store: InfoStore, query: string) {
+  const needle = query.trim().toLocaleLowerCase();
+  return [...store.systems].filter((item) => !needle || [item.name, ...item.links.flatMap((link) => [link.label, link.url])].join("\n").toLocaleLowerCase().includes(needle)).sort((a, b) => a.order - b.order);
+}
+
+export function updateSystemLink(store: InfoStore, id: string, nameInput: string, urlInput: string, now = Date.now()) {
+  const name = nameInput.trim().slice(0, 200), url = safeUrl(urlInput);
+  if (!name || !url) return null;
+  let found = false;
+  const systems = store.systems.map((item) => {
+    if (item.id !== id) return item;
+    found = true;
+    const link = item.links.find((value) => value.id === item.defaultLinkId) || item.links[0];
+    return { ...item, name, links: item.links.map((value) => value.id === link.id ? { ...value, url } : value), updatedAt: now };
+  });
+  return found ? { ...store, systems } : null;
+}
+
+export function deleteResourceSection(store: InfoStore, sectionId: string, targetSectionId: string) {
+  const resourceSections = store.sections.filter((section) => section.type === "resources");
+  if (resourceSections.length <= 1 || sectionId === targetSectionId || !resourceSections.some((section) => section.id === sectionId) || !resourceSections.some((section) => section.id === targetSectionId)) return null;
+  return { ...store, sections: store.sections.filter((section) => section.id !== sectionId).map((section, index) => ({ ...section, order: index })), resources: store.resources.map((item) => item.sectionId === sectionId ? { ...item, sectionId: targetSectionId } : item) };
+}
+
 export function parseInfoStore(raw: string): InfoStore | null {
   try {
     const value = JSON.parse(raw) as Partial<InfoStore>;
@@ -164,7 +188,9 @@ export function parseInfoStore(raw: string): InfoStore | null {
       }).slice(0, 20);
       if (!links.length) return [];
       seen.add(item.id);
-      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "systems") ? item.sectionId : systemSection, name: item.name.trim().slice(0, 200) || new URL(links[0].url).hostname, icon: typeof item.icon === "string" ? item.icon.slice(0, 2) : "站", links, defaultLinkId: links.some((link) => link.id === item.defaultLinkId) ? item.defaultLinkId : links[0].id, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
+      const rawIcon = typeof item.icon === "string" ? item.icon.trim() : "";
+      const icon = /^https?:\/\//i.test(rawIcon) ? safeUrl(rawIcon)?.slice(0, 2048) || "站" : rawIcon.slice(0, 2) || "站";
+      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId && section.type === "systems") ? item.sectionId : systemSection, name: item.name.trim().slice(0, 200) || new URL(links[0].url).hostname, icon, links, defaultLinkId: links.some((link) => link.id === item.defaultLinkId) ? item.defaultLinkId : links[0].id, order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
     const resources: ResourceItem[] = value.resources.flatMap((item): ResourceItem[] => {
       if (!resourceSection || !item || typeof item.id !== "string" || seen.has(item.id) || !Array.isArray(item.blocks)) return [];
