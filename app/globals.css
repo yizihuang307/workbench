@@ -675,3 +675,68 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (prefers-reduced-motion: reduce) {
   button { transition: none; }
 }
+
+/* Compact desktop controls */
+:root { --control-compact: 36px; }
+
+.quick-note footer { gap: 8px; margin-top: 10px; }
+.quick-note footer button {
+  min-height: var(--control-compact);
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.modal-close {
+  width: var(--control-compact);
+  height: var(--control-compact);
+  font-size: 18px;
+}
+
+.category-bar { gap: 6px; padding-bottom: 11px; }
+.category-bar > button, .category-tab {
+  min-height: var(--control-compact);
+  border-radius: 9px;
+}
+.category-bar > button { padding: 0 11px; font-size: 13px; }
+.category-tab > button { min-height: 34px; padding: 0 10px; font-size: 13px; }
+.category-bar em { margin-left: 4px; font-size: 9px; }
+.category-bar .category-manage { padding-inline: 12px; }
+
+.records-modal { width: min(620px,100%); padding: 24px; }
+.records-modal > header { padding-right: 38px; }
+.records-modal > header h2 { margin-bottom: 18px; font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
+.records-modal .modal-close { top: 10px; right: 10px; width: 32px; height: 32px; }
+.category-manager { gap: 7px; }
+.category-add, .category-edit { gap: 7px; }
+.category-add input, .category-edit input {
+  min-height: 40px;
+  padding-inline: 11px;
+  border-radius: 9px;
+  font-size: 14px;
+}
+.category-add button, .category-edit button {
+  min-width: 64px;
+  min-height: var(--control-compact);
+  align-self: center;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.category-delete-dialog footer, .ai-consent footer, .ai-result footer { gap: 8px; margin-top: 18px; }
+.category-delete-dialog footer button, .ai-consent footer button, .ai-result footer button {
+  min-height: var(--control-compact);
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  :root { --control-compact: 44px; }
+  .quick-note footer button { padding-inline: 16px; font-size: 14px; }
+  .category-bar > button, .category-tab { min-height: var(--control-compact); }
+  .category-tab > button { min-height: 42px; font-size: 14px; }
+  .records-modal { width: 100%; padding: 64px 18px 24px; }
+  .records-modal > header h2 { font-size: 22px; }
+  .category-add button, .category-edit button,
+  .category-delete-dialog footer button, .ai-consent footer button, .ai-result footer button { min-height: var(--control-compact); }
+}

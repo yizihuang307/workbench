@@ -111,3 +111,12 @@ test("modern violet design system and emoji navigation stay in place", async () 
   assert.match(css, /--success-9:\s*#30a46c/);
   assert.match(css, /backdrop-filter:\s*blur\(18px\)/);
 });
+
+test("desktop record controls use the compact size system", async () => {
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /--control-compact:\s*36px/);
+  assert.match(css, /\.quick-note footer button \{[^}]*min-height: var\(--control-compact\)/s);
+  assert.match(css, /\.category-bar > button, \.category-tab \{[^}]*min-height: var\(--control-compact\)/s);
+  assert.match(css, /\.records-modal > header h2 \{[^}]*font-size: 20px/s);
+  assert.match(css, /@media \(max-width: 640px\) \{[^}]*--control-compact: 44px/s);
+});
