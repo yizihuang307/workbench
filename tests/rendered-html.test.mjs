@@ -73,9 +73,12 @@ test("record move menu opens on hover and escapes the scrolling list", async () 
   assert.match(view, /createPortal\(<div className="record-move-menu"/);
   assert.match(view, /onMouseEnter=\{keepMoveMenuOpen\}/);
   assert.match(view, /rect\.right \+ menuWidth <= window\.innerWidth/);
-  assert.match(css, /\.record-menu \{[^}]*width: 88px/);
+  assert.match(css, /\.record-menu \{[^}]*width: 112px/);
+  assert.match(css, /\.record-menu button \{[^}]*min-height: 36px;[^}]*padding: 0 10px;[^}]*font-size: 13px/s);
   assert.match(css, /\.record-move-menu \{[^}]*position: fixed/);
   assert.match(css, /\.record-move-menu \{[^}]*z-index: 1000/);
+  assert.match(css, /\.record-move-menu \{[^}]*width: 112px/);
+  assert.match(css, /\.record-move-menu button \{[^}]*min-height: 36px;[^}]*padding: 0 10px;[^}]*font-size: 13px/s);
 });
 
 test("record search fills its complete toolbar row", async () => {
