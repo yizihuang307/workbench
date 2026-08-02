@@ -164,3 +164,11 @@ test("record and information filter tabs use restrained color markers", async ()
   assert.match(design, /\*\*Tab 色标圆点\*\*/);
   assert.match(design, /管理、设置、删除等动作按钮不加圆点/);
 });
+
+test("desktop record list and editor scroll independently", async () => {
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /@media \(min-width: 641px\) \{[\s\S]*\.records-page \{[\s\S]*height: 100vh;[\s\S]*overflow: hidden;/);
+  assert.match(css, /\.records-layout \{[\s\S]*min-height: 0;[\s\S]*flex: 1 1 auto;/);
+  assert.match(css, /\.record-browser, \.record-editor \{ min-height: 0; overflow: hidden; \}/);
+  assert.match(css, /\.record-list, \.record-document-editor \{[\s\S]*overflow-y: auto;[\s\S]*overscroll-behavior: contain;/);
+});
