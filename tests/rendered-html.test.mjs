@@ -73,9 +73,12 @@ test("record move menu opens on hover and escapes the scrolling list", async () 
   assert.match(view, /createPortal\(<div className="record-move-menu"/);
   assert.match(view, /onMouseEnter=\{keepMoveMenuOpen\}/);
   assert.match(view, /rect\.right \+ menuWidth <= window\.innerWidth/);
-  assert.match(css, /\.record-menu \{[^}]*width: 88px/);
+  assert.match(css, /\.record-menu \{[^}]*width: 112px/);
+  assert.match(css, /\.record-menu button \{[^}]*min-height: 36px;[^}]*padding: 0 10px;[^}]*font-size: 13px/s);
   assert.match(css, /\.record-move-menu \{[^}]*position: fixed/);
   assert.match(css, /\.record-move-menu \{[^}]*z-index: 1000/);
+  assert.match(css, /\.record-move-menu \{[^}]*width: 112px/);
+  assert.match(css, /\.record-move-menu button \{[^}]*min-height: 36px;[^}]*padding: 0 10px;[^}]*font-size: 13px/s);
 });
 
 test("record search fills its complete toolbar row", async () => {
@@ -167,4 +170,25 @@ test("information detail is one accessible document editor with complete core co
   assert.match(model, /linkifyPlainText/);
   assert.match(css, /\.document-editor a \{[^}]*text-decoration: underline/);
   assert.match(css, /\.document-editor table \{[^}]*overflow-x: auto/);
+});
+
+test("record and information filter tabs use restrained color markers", async () => {
+  const [css, design] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../design.md", import.meta.url), "utf8")),
+  ]);
+  assert.match(css, /--blue-9:\s*#0090ff/);
+  assert.match(css, /\.category-bar > button:not\(\.category-manage\)::before, \.category-tab > button::before,[\s\S]*\.info-index button::before \{[\s\S]*width: 8px;[\s\S]*border-radius: 50%/);
+  assert.match(css, /\.category-tab:nth-child\(2\) > button::before, \.info-index button:nth-child\(2\)::before \{ background: var\(--success-9\)/);
+  assert.doesNotMatch(css, /\.category-manage::before/);
+  assert.match(design, /\*\*Tab 色标圆点\*\*/);
+  assert.match(design, /管理、设置、删除等动作按钮不加圆点/);
+});
+
+test("desktop record list and editor scroll independently", async () => {
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /@media \(min-width: 641px\) \{[\s\S]*\.records-page \{[\s\S]*height: 100vh;[\s\S]*overflow: hidden;/);
+  assert.match(css, /\.records-layout \{[\s\S]*min-height: 0;[\s\S]*flex: 1 1 auto;/);
+  assert.match(css, /\.record-browser, \.record-editor \{ min-height: 0; overflow: hidden; \}/);
+  assert.match(css, /\.record-list, \.record-document-editor \{[\s\S]*overflow-y: auto;[\s\S]*overscroll-behavior: contain;/);
 });

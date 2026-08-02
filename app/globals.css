@@ -454,14 +454,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .record-card mark { padding: 0 1px; background: var(--lemon); color: inherit; }
 .record-actions { position: relative; padding: 0 !important; }
 .record-more { width: 44px; height: 44px; border: 0; background: transparent; color: #777168; font-size: 14px; letter-spacing: -1px; }
-.record-menu { position: absolute; z-index: 25; top: 36px; right: 0; width: 88px; display: grid; padding: 3px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 2px 2px 0 rgba(36,34,31,.12); }
+.record-menu { position: absolute; z-index: 25; top: 36px; right: 0; width: 112px; display: grid; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.96); backdrop-filter: blur(18px) saturate(140%); box-shadow: var(--shadow-float); }
 .record-menu strong { padding: 5px 7px 3px; color: var(--muted); font-size: 10px; }
-.record-menu button { min-height: 30px; padding: 0 6px; border: 0; background: transparent; font-size: 12px; text-align: left; white-space: nowrap; }
+.record-menu button { min-height: 36px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; font-size: 13px; text-align: left; white-space: nowrap; }
 .record-menu button:hover { background: var(--sky); }
 .record-menu .danger { margin-top: 2px; border-top: 1px solid var(--line); color: #a43b2c; }
 .record-menu .move-trigger { display: flex; align-items: center; justify-content: space-between; }
 .record-menu .move-trigger span { font-size: 15px; }
-.record-move-menu { position: fixed; z-index: 1000; width: max-content; min-width: 112px; max-width: 180px; display: grid; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.96); backdrop-filter: blur(18px) saturate(140%); box-shadow: var(--shadow-float); }
+.record-move-menu { position: fixed; z-index: 1000; width: 112px; display: grid; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.96); backdrop-filter: blur(18px) saturate(140%); box-shadow: var(--shadow-float); }
 .record-move-menu button { min-height: 36px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; font-size: 13px; text-align: left; white-space: nowrap; }
 .record-move-menu button:hover, .record-move-menu button:focus-visible { background: var(--violet-3); }
 .editor-category { min-height: 32px; display: inline-flex; align-items: center; padding: 0 9px; border: 1px solid var(--line); color: #68635b; font-size: 12px; line-height: 1; }
@@ -508,6 +508,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   --tomato-9: #e54d2e;
   --tomato-11: #d13415;
   --success-9: #30a46c;
+  --blue-9: #0090ff;
   --info-9: #0090ff;
   --gray-1: #fcfcfc;
   --gray-2: #f9f9f9;
@@ -738,6 +739,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .category-bar em { margin-left: 4px; font-size: 9px; }
 .category-bar .category-manage { padding-inline: 12px; }
 
+/* Small semantic color markers add energy without turning tabs into color blocks */
+.category-bar > button:not(.category-manage), .category-tab > button,
+.info-index button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.category-bar > button:not(.category-manage)::before, .category-tab > button::before,
+.info-index button::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--blue-9);
+}
+.category-tab:nth-child(2) > button::before, .info-index button:nth-child(2)::before { background: var(--success-9); }
+.category-tab:nth-child(3) > button::before, .info-index button:nth-child(3)::before { background: var(--amber-9); }
+.category-tab:nth-child(4) > button::before, .info-index button:nth-child(4)::before { background: var(--tomato-9); }
+.category-tab:nth-child(5) > button::before, .info-index button:nth-child(5)::before { background: var(--violet-8); }
+.category-tab:nth-child(6) > button::before, .info-index button:nth-child(6)::before { background: var(--success-9); }
+.category-bar > button.active::before, .category-tab.active > button::before,
+.info-index button:first-child::before {
+  box-shadow: 0 0 0 2px rgba(255,255,255,.58);
+}
+
 .records-modal { width: min(620px,100%); padding: 24px; }
 .records-modal > header { padding-right: 38px; }
 .records-modal > header h2 { margin-bottom: 18px; font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
@@ -858,4 +885,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .info-empty button, .link-block button, .file-block a { min-height: var(--control-compact); }
   .info-dialog { padding: 56px 18px 24px; }
   .info-dialog h2 { font-size: 22px; }
+}
+
+/* Desktop records: list and editor own independent scroll containers */
+@media (min-width: 641px) {
+  .records-page {
+    height: 100vh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 18px;
+  }
+  .category-bar { flex: 0 0 auto; }
+  .records-layout {
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+  .record-browser, .record-editor { min-height: 0; overflow: hidden; }
+  .record-list, .record-document-editor {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
 }
