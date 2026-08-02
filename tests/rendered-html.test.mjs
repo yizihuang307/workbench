@@ -168,6 +168,8 @@ test("information detail is one accessible document editor with complete core co
   assert.match(editor, /handleDrop\(view, event\)/);
   assert.match(editor, /input[^>]*multiple type="file"/);
   assert.match(editor, /TaskItem\.configure\(\{ nested: true \}\)/);
+  assert.match(editor, /from "lucide-react"/);
+  assert.match(editor, /event\.target === event\.currentTarget/);
   assert.match(editor, /TableKit\.configure/);
   assert.match(editor, /tableActive && <div className="table-context"/);
   assert.match(editor, /addRowAfter\(\)/);
@@ -181,6 +183,10 @@ test("information detail is one accessible document editor with complete core co
   assert.match(model, /sanitizeDocumentHtml/);
   assert.match(model, /linkifyPlainText/);
   assert.match(css, /\.tiptap-document a \{[^}]*text-decoration: underline/);
+  assert.match(css, /ul:not\(\[data-type="taskList"\]\) \{ list-style-type: disc/);
+  assert.match(css, /\.tiptap-document ol \{ list-style-type: decimal/);
+  assert.match(css, /\.tiptap-document \{ width: 100%; min-height: 58vh/);
+  assert.match(css, /grid-template-columns: 20px minmax\(0,1fr\)/);
   assert.match(css, /\.tiptap-document \.tableWrapper \{[^}]*overflow-x: auto/);
   assert.match(css, /\.image-resize-handle/);
 });

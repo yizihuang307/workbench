@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, type ReactNodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TableKit } from "@tiptap/extension-table";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
+import { Bold, Italic, List, ListOrdered, ListTodo, Paperclip, Redo2, Table2, Undo2 } from "lucide-react";
 import { deriveDocumentTitle, DOCUMENT_LIMIT, FILE_LIMIT, htmlText, infoId, legacyDocumentHtml, linkifyPlainText, safeUrl, sanitizeDocumentHtml, TOTAL_FILE_LIMIT, type InfoBlock, type ResourceItem } from "./information";
 
 type FileBlock = Extract<InfoBlock, { type: "file" }>;
@@ -114,17 +115,17 @@ export default function InformationEditor({ item, fileBytes, onUpdate, onNotice 
   }, []);
 
   if (!editor) return <div className="editor-loading">编辑器加载中…</div>;
-  const action = (name: string, run: () => void, active = false, content = name) => <button type="button" className={active ? "active" : ""} aria-label={name} title={name} onMouseDown={(event) => event.preventDefault()} onClick={run}>{content}</button>;
+  const action = (name: string, run: () => void, active = false, content: ReactNode = name) => <button type="button" className={active ? "active" : ""} aria-label={name} title={name} onMouseDown={(event) => event.preventDefault()} onClick={run}>{content}</button>;
   return <div className="tiptap-shell">
     <div className="tiptap-toolbar" aria-label="正文格式工具栏">
       <select aria-label="文字样式" value={editor.isActive("heading", { level: 2 }) ? "h2" : editor.isActive("heading", { level: 3 }) ? "h3" : "p"} onChange={(event) => event.target.value === "h2" ? editor.chain().focus().toggleHeading({ level: 2 }).run() : event.target.value === "h3" ? editor.chain().focus().toggleHeading({ level: 3 }).run() : editor.chain().focus().setParagraph().run()}><option value="p">正文</option><option value="h2">标题</option><option value="h3">副标题</option></select>
-      {action("加粗", () => editor.chain().focus().toggleBold().run(), editor.isActive("bold"), "B")}{action("斜体", () => editor.chain().focus().toggleItalic().run(), editor.isActive("italic"), "I")}<i />
-      {action("项目符号", () => editor.chain().focus().toggleBulletList().run(), editor.isActive("bulletList"), "•")}{action("编号", () => editor.chain().focus().toggleOrderedList().run(), editor.isActive("orderedList"), "1.")}{action("待办", () => editor.chain().focus().toggleTaskList().run(), editor.isActive("taskList"), "☑")}<i />
-      {action("表格", () => editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: false }).run(), false, "▦")}{action("附件", () => document.getElementById(fileInputId)?.click(), false, "⌕")}<span />
-      {action("撤销", () => editor.chain().focus().undo().run(), false, "↶")}{action("重做", () => editor.chain().focus().redo().run(), false, "↷")}
+      <div className="toolbar-group">{action("加粗", () => editor.chain().focus().toggleBold().run(), editor.isActive("bold"), <Bold />)}{action("斜体", () => editor.chain().focus().toggleItalic().run(), editor.isActive("italic"), <Italic />)}</div>
+      <div className="toolbar-group">{action("项目符号", () => editor.chain().focus().toggleBulletList().run(), editor.isActive("bulletList"), <List />)}{action("编号", () => editor.chain().focus().toggleOrderedList().run(), editor.isActive("orderedList"), <ListOrdered />)}{action("待办", () => editor.chain().focus().toggleTaskList().run(), editor.isActive("taskList"), <ListTodo />)}</div>
+      <div className="toolbar-group">{action("表格", () => editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: false }).run(), false, <Table2 />)}{action("附件", () => document.getElementById(fileInputId)?.click(), false, <Paperclip />)}</div><span />
+      <div className="toolbar-group history">{action("撤销", () => editor.chain().focus().undo().run(), false, <Undo2 />)}{action("重做", () => editor.chain().focus().redo().run(), false, <Redo2 />)}</div>
       <input id={fileInputId} hidden multiple type="file" onChange={(event) => { void insertFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
     </div>
-    <div className="tiptap-page"><EditorContent editor={editor} />{tableActive && <div className="table-context" role="toolbar" aria-label="表格操作">{action("添加行", () => editor.chain().focus().addRowAfter().run(), false, "＋行")}{action("删除行", () => editor.chain().focus().deleteRow().run(), false, "－行")}{action("添加列", () => editor.chain().focus().addColumnAfter().run(), false, "＋列")}{action("删除列", () => editor.chain().focus().deleteColumn().run(), false, "－列")}{action("删除表格", () => editor.chain().focus().deleteTable().run(), false, "删除")}</div>}</div>
+    <div className="tiptap-page" onClick={(event) => { if (event.target === event.currentTarget) editor.chain().focus("end").run(); }}><EditorContent editor={editor} />{tableActive && <div className="table-context" role="toolbar" aria-label="表格操作">{action("添加行", () => editor.chain().focus().addRowAfter().run(), false, "＋行")}{action("删除行", () => editor.chain().focus().deleteRow().run(), false, "－行")}{action("添加列", () => editor.chain().focus().addColumnAfter().run(), false, "＋列")}{action("删除列", () => editor.chain().focus().deleteColumn().run(), false, "－列")}{action("删除表格", () => editor.chain().focus().deleteTable().run(), false, "删除")}</div>}</div>
     <footer className="tiptap-status"><span>{htmlText(editor.getHTML()).length} / 30000</span><span>自动保存 · 支持拖入或选择附件</span></footer>
     {preview && <div className="document-preview" role="dialog" aria-modal="true" aria-label={`预览${preview.name}`} onClick={() => setPreview(null)}><button aria-label="关闭预览">×</button><img src={preview.src} alt={preview.name} /></div>}
   </div>;
