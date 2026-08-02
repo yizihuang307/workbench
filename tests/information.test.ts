@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deriveTitle, emptyInfoStore, FILE_LIMIT, parseInfoStore, safeUrl, totalFileBytes, urlMeta, visibleResources } from "../app/information";
+import { dataUrlBytes, deriveTitle, DOCUMENT_LIMIT, emptyInfoStore, FILE_LIMIT, htmlText, legacyDocumentHtml, linkifyPlainText, parseInfoStore, safeUrl, sanitizeDocumentHtml, tableHtml, totalFileBytes, urlMeta, visibleResources } from "../app/information";
 
 test("unsafe and malformed links are rejected", () => {
   assert.equal(safeUrl("javascript:alert(1)"), null);
@@ -73,4 +73,78 @@ test("single-character accidental auto titles recover to the full first line", (
   ], systems: [], resources: [{ id: "r", sectionId: "work", title: "y", blocks: [{ id: "t", type: "text", text: "yes 完整标题\n正文" }], createdAt: 1, updatedAt: 1 }] }));
   assert.equal(parsed?.resources[0].title, "yes 完整标题");
   assert.equal(parsed?.resources[0].titleAuto, true);
+});
+
+test("legacy blocks become one ordered document without embedding attachment data", () => {
+  const html = legacyDocumentHtml([
+    { id: "t", type: "text", text: "第一行\n第二行" },
+    { id: "l", type: "link", url: "https://example.com/path", title: "示例", domain: "example.com" },
+    { id: "f", type: "file", name: "方案.png", mime: "image/png", size: 2, dataUrl: "data:image/png;base64,AA==" },
+  ]);
+  assert.match(html, /第一行<br>第二行/);
+  assert.match(html, /href="https:\/\/example\.com\/path"/);
+  assert.match(html, /data-file-id="f"/);
+  assert.doesNotMatch(html, /base64/);
+});
+
+test("document sanitizer keeps note formatting and strips executable content", () => {
+  const html = sanitizeDocumentHtml('<h2 onclick="evil()">标题</h2><script>alert(1)</script><a href="javascript:alert(1)">坏链接</a><a href="https://example.com">好链接</a><table><tbody><tr><td>x</td></tr></tbody></table>');
+  assert.match(html, /^<h2>标题<\/h2>/);
+  assert.doesNotMatch(html, /script|onclick|javascript:/i);
+  assert.match(html, /href="https:\/\/example\.com\/"/);
+  assert.match(html, /<table>/);
+});
+
+test("plain text extraction supports title and search without leaking markup", () => {
+  assert.equal(htmlText("<h2>标题 &amp; 说明</h2><p>第二行<br>继续</p>"), "标题 & 说明\n第二行\n继续");
+});
+
+test("table helper clamps extreme dimensions", () => {
+  assert.equal((tableHtml(2, 2).match(/<td>/g) || []).length, 4);
+  assert.equal((tableHtml(0, 99).match(/<td>/g) || []).length, 10);
+});
+
+test("stored rich documents survive parsing and remain searchable", () => {
+  const parsed = parseInfoStore(JSON.stringify({ version: 1, sections: [
+    { id: "systems", name: "常用链接", type: "systems", order: 0 },
+    { id: "work", name: "工作资料", type: "resources", order: 1 },
+  ], systems: [], resources: [{ id: "r", sectionId: "work", title: "资料", documentHtml: '<h2>项目 Alpha</h2><p>https://example.com</p>', blocks: [{ id: "t", type: "text", text: "旧正文" }], createdAt: 1, updatedAt: 1 }] }));
+  assert.match(parsed?.resources[0].documentHtml || "", /项目 Alpha/);
+  assert.equal(visibleResources(parsed!, "all", "alpha")[0].id, "r");
+});
+
+test("plain URLs become safe links while punctuation and unsafe text stay intact", () => {
+  const linked = linkifyPlainText("官网 https://example.com/a?b=1，备用 www.openai.com。 javascript:alert(1)");
+  assert.match(linked, /href="https:\/\/example\.com\/a\?b=1"/);
+  assert.match(linked, /href="https:\/\/www\.openai\.com\/"/);
+  assert.match(linked, /<\/a>，/);
+  assert.doesNotMatch(linked, /href="javascript:/);
+});
+
+test("corrupted oversized rich text is recovered at the product limit", () => {
+  const parsed = parseInfoStore(JSON.stringify({ version: 1, sections: [
+    { id: "systems", name: "常用链接", type: "systems", order: 0 },
+    { id: "work", name: "工作资料", type: "resources", order: 1 },
+  ], systems: [], resources: [{ id: "r", sectionId: "work", title: "大文档", documentHtml: `<h2>${"中".repeat(DOCUMENT_LIMIT + 5000)}</h2>`, blocks: [], createdAt: 1, updatedAt: 1 }] }));
+  assert.equal(htmlText(parsed?.resources[0].documentHtml || "").length, DOCUMENT_LIMIT);
+});
+
+test("sanitizer preserves multilingual text, emoji, check state and attachment references", () => {
+  const html = sanitizeDocumentHtml('<p>中文 English 日本語 🚀</p><ul><li data-checked="false">待办</li><li data-checked="true">完成</li></ul><figure data-file-id="f"><img src="data:image/png;base64,evil"></figure>');
+  assert.match(html, /中文 English 日本語 🚀/);
+  assert.match(html, /data-checked="false"/);
+  assert.match(html, /data-checked="true"/);
+  assert.match(html, /data-file-id="f"/);
+  assert.doesNotMatch(html, /base64|src=/);
+});
+
+test("file recovery verifies encoded size and enforces the 20 attachment boundary", () => {
+  assert.equal(dataUrlBytes("data:text/plain;base64,SGVsbG8="), 5);
+  assert.equal(dataUrlBytes("data:text/plain,hello%20world"), 11);
+  const files = Array.from({ length: 21 }, (_, index) => ({ id: `f${index}`, type: "file", name: `${index}.txt`, mime: "text/plain", size: 1, dataUrl: "data:text/plain;base64,QQ==" }));
+  const parsed = parseInfoStore(JSON.stringify({ version: 1, sections: [
+    { id: "systems", name: "常用链接", type: "systems", order: 0 },
+    { id: "work", name: "工作资料", type: "resources", order: 1 },
+  ], systems: [], resources: [{ id: "r", sectionId: "work", title: "附件", blocks: files, createdAt: 1, updatedAt: 1 }] }));
+  assert.equal(parsed?.resources[0].blocks.length, 20);
 });

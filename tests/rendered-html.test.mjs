@@ -148,3 +148,23 @@ test("desktop information controls use the compact size system", async () => {
   assert.match(css, /\.file-block a \{[^}]*min-height: var\(--control-compact\)/s);
   assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.info-index button, \.info-manage,[\s\S]*min-height: var\(--control-compact\)/);
 });
+
+test("information detail is one accessible document editor with complete core controls", async () => {
+  const [view, model, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(view, /contentEditable[^>]*role="textbox"[^>]*aria-multiline="true"/);
+  for (const label of ["文字样式", "加粗", "斜体", "项目符号列表", "编号列表", "待办列表", "插入表格", "添加附件", "撤销", "重做"]) assert.match(view, new RegExp(`aria-label="${label}"`));
+  assert.match(view, /onPaste=\{handlePaste\}/);
+  assert.match(view, /onDrop=.*addFiles/s);
+  assert.match(view, /event\.key === "Backspace" \|\| event\.key === "Delete"/);
+  assert.match(view, /setPreviewFile\(file\)/);
+  assert.match(view, /editTable\("row-add"\)/);
+  assert.match(view, /editTable\("column-remove"\)/);
+  assert.match(model, /sanitizeDocumentHtml/);
+  assert.match(model, /linkifyPlainText/);
+  assert.match(css, /\.document-editor a \{[^}]*text-decoration: underline/);
+  assert.match(css, /\.document-editor table \{[^}]*overflow-x: auto/);
+});
