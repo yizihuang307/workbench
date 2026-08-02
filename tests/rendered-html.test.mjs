@@ -133,3 +133,12 @@ test("design system documents the confirmed density and visual guardrails", asyn
   assert.match(design, /琥珀黄只承担小面积提醒/);
   assert.match(design, /## Overview[\s\S]*## Colors[\s\S]*## Typography[\s\S]*## Layout[\s\S]*## Elevation & Depth[\s\S]*## Shapes[\s\S]*## Components[\s\S]*## Do's and Don'ts/);
 });
+
+test("desktop information controls use the compact size system", async () => {
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /\.info-index button, \.info-manage \{[^}]*min-height: var\(--control-compact\)/s);
+  assert.match(css, /\.system-section header button, \.resource-section header button \{[^}]*width: var\(--control-compact\)[^}]*height: var\(--control-compact\)/s);
+  assert.match(css, /\.info-dialog footer button, \.section-add button \{[^}]*min-height: var\(--control-compact\)/s);
+  assert.match(css, /\.info-dialog > input, \.section-add input, \.section-manage-row input \{[^}]*min-height: 40px/s);
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.info-index button, \.info-manage,[\s\S]*min-height: var\(--control-compact\)/);
+});

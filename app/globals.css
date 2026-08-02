@@ -732,6 +732,47 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 13px;
 }
 
+/* Information page follows the same compact desktop density */
+.info-index { gap: 6px; }
+.info-index button, .info-manage {
+  min-height: var(--control-compact);
+  padding: 0 11px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.system-section header button, .resource-section header button {
+  width: var(--control-compact);
+  height: var(--control-compact);
+  border-radius: 9px;
+  font-size: 18px;
+}
+.view-all {
+  min-height: var(--control-compact);
+  padding-inline: 12px;
+  font-size: 13px;
+}
+.workspace-back, .workspace-danger, .workspace-close,
+.workspace-actions button {
+  min-height: var(--control-compact);
+  border-radius: 9px;
+  font-size: 13px;
+}
+.workspace-close { width: var(--control-compact); height: var(--control-compact); }
+.resource-workspace select { min-height: 40px; border-radius: 9px; font-size: 13px; }
+.info-dialog { padding: 24px; }
+.info-dialog h2 { font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
+.info-dialog > input, .section-add input, .section-manage-row input {
+  min-height: 40px;
+  border-radius: 9px;
+  font-size: 14px;
+}
+.info-dialog footer button, .section-add button {
+  min-height: var(--control-compact);
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
 @media (max-width: 640px) {
   :root { --control-compact: 44px; }
   .quick-note footer button { padding-inline: 16px; font-size: 14px; }
@@ -741,4 +782,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .records-modal > header h2 { font-size: 22px; }
   .category-add button, .category-edit button,
   .category-delete-dialog footer button, .ai-consent footer button, .ai-result footer button { min-height: var(--control-compact); }
+  .info-index button, .info-manage,
+  .system-section header button, .resource-section header button,
+  .view-all, .workspace-back, .workspace-danger, .workspace-close,
+  .workspace-actions button, .info-dialog footer button, .section-add button {
+    min-height: var(--control-compact);
+  }
+  .system-section header button, .resource-section header button,
+  .workspace-close { width: var(--control-compact); height: var(--control-compact); }
+  .info-dialog { padding: 56px 18px 24px; }
+  .info-dialog h2 { font-size: 22px; }
 }
