@@ -194,6 +194,85 @@ export function deleteResourceSection(store: InfoStore, sectionId: string, targe
   return { ...store, sections: store.sections.filter((section) => section.id !== sectionId).map((section, index) => ({ ...section, order: index })), resources: store.resources.map((item) => item.sectionId === sectionId ? { ...item, sectionId: targetSectionId } : item) };
 }
 
+export function reorderResourceSections(store: InfoStore, draggedId: string, targetId: string, position: "before" | "after" = "before") {
+  if (draggedId === targetId) return null;
+  const sections = [...store.sections].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+  const from = sections.findIndex((item) => item.id === draggedId), target = sections.findIndex((item) => item.id === targetId);
+  if (from < 0 || target < 0) return null;
+  const [picked] = sections.splice(from, 1);
+  const nextTarget = sections.findIndex((item) => item.id === targetId);
+  sections.splice(nextTarget + (position === "after" ? 1 : 0), 0, picked);
+  return { ...store, sections: sections.map((item, order) => ({ ...item, order })) };
+}
+
+export function reorderLinkGroups(store: InfoStore, draggedId: string, targetId: string, position: "before" | "after" = "before") {
+  if (draggedId === targetId) return null;
+  const groups = [...store.linkGroups].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+  const from = groups.findIndex((item) => item.id === draggedId), target = groups.findIndex((item) => item.id === targetId);
+  if (from < 0 || target < 0) return null;
+  const [picked] = groups.splice(from, 1);
+  const nextTarget = groups.findIndex((item) => item.id === targetId);
+  groups.splice(nextTarget + (position === "after" ? 1 : 0), 0, picked);
+  return { ...store, linkGroups: groups.map((item, order) => ({ ...item, order })) };
+}
+
+export function deleteLinkGroup(store: InfoStore, groupId: string) {
+  if (!store.linkGroups.some((group) => group.id === groupId)) return null;
+  return {
+    ...store,
+    linkGroups: store.linkGroups.filter((group) => group.id !== groupId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((group, order) => ({ ...group, order })),
+    systems: store.systems.map((item) => item.groupId === groupId ? { ...item, groupId: UNGROUPED } : item),
+  };
+}
+
+export function moveResource(store: InfoStore, resourceId: string, targetSectionId: string, beforeResourceId?: string) {
+  const picked = store.resources.find((item) => item.id === resourceId);
+  if (!picked || !store.sections.some((section) => section.id === targetSectionId)) return null;
+  if (beforeResourceId === resourceId) return null;
+  const before = beforeResourceId ? store.resources.find((item) => item.id === beforeResourceId && item.sectionId === targetSectionId) : undefined;
+  if (beforeResourceId && !before) return null;
+  const sourceSectionId = picked.sectionId;
+  const lists = new Map<string, ResourceItem[]>();
+  for (const sectionId of new Set([sourceSectionId, targetSectionId])) {
+    lists.set(sectionId, store.resources.filter((item) => item.sectionId === sectionId && item.id !== resourceId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
+  }
+  const target = lists.get(targetSectionId) || [];
+  const insertAt = before ? target.findIndex((item) => item.id === before.id) : target.length;
+  target.splice(insertAt < 0 ? target.length : insertAt, 0, { ...picked, sectionId: targetSectionId });
+  lists.set(targetSectionId, target);
+  const positions = new Map<string, number>();
+  for (const [sectionId, items] of lists) items.forEach((item, order) => positions.set(`${sectionId}\u0000${item.id}`, order));
+  return { ...store, resources: store.resources.map((item) => {
+    const sectionId = item.id === resourceId ? targetSectionId : item.sectionId;
+    const order = positions.get(`${sectionId}\u0000${item.id}`);
+    return order === undefined ? item : { ...item, sectionId, order };
+  }) };
+}
+
+export function moveLink(store: InfoStore, linkId: string, targetGroupId: string, beforeLinkId?: string) {
+  const validGroup = targetGroupId === UNGROUPED || store.linkGroups.some((group) => group.id === targetGroupId);
+  const picked = store.systems.find((item) => item.id === linkId);
+  if (!picked || !validGroup || beforeLinkId === linkId) return null;
+  const before = beforeLinkId ? store.systems.find((item) => item.id === beforeLinkId && item.groupId === targetGroupId) : undefined;
+  if (beforeLinkId && !before) return null;
+  const sourceGroupId = picked.groupId;
+  const lists = new Map<string, SystemItem[]>();
+  for (const groupId of new Set([sourceGroupId, targetGroupId])) {
+    lists.set(groupId, store.systems.filter((item) => item.groupId === groupId && item.id !== linkId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt));
+  }
+  const target = lists.get(targetGroupId) || [];
+  const insertAt = before ? target.findIndex((item) => item.id === before.id) : target.length;
+  target.splice(insertAt < 0 ? target.length : insertAt, 0, { ...picked, groupId: targetGroupId });
+  lists.set(targetGroupId, target);
+  const positions = new Map<string, number>();
+  for (const [groupId, items] of lists) items.forEach((item, order) => positions.set(`${groupId}\u0000${item.id}`, order));
+  return { ...store, systems: store.systems.map((item) => {
+    const groupId = item.id === linkId ? targetGroupId : item.groupId;
+    const order = positions.get(`${groupId}\u0000${item.id}`);
+    return order === undefined ? item : { ...item, groupId, order };
+  }) };
+}
+
 export function parseInfoStore(raw: string): InfoStore | null {
   try {
     const value = JSON.parse(raw) as Partial<InfoStore> & { version?: number; sections?: unknown[] };
@@ -253,7 +332,11 @@ export function parseInfoStore(raw: string): InfoStore | null {
       const repairTruncatedAutoTitle = rawTitle.length === 1 && derived.length > 1 && derived.startsWith(rawTitle);
       return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId) ? item.sectionId : firstSectionId, title: repairTruncatedAutoTitle ? derived : rawTitle, titleAuto: repairTruncatedAutoTitle || Boolean(item.titleAuto), documentHtml, blocks, pinned: Boolean(item.pinned), order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
-    const store: InfoStore = { version: 2, linkGroups, sections: sections.sort((a, b) => a.order - b.order), systems, resources };
+    const normalizedSections = sections.sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((section, order) => ({ ...section, order }));
+    const normalizedGroups = linkGroups.map((group, order) => ({ ...group, order }));
+    const normalizedResources = normalizedSections.flatMap((section) => resources.filter((item) => item.sectionId === section.id).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((item, order) => ({ ...item, order })));
+    const normalizedSystems = [UNGROUPED, ...normalizedGroups.map((group) => group.id)].flatMap((groupId) => systems.filter((item) => item.groupId === groupId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((item, order) => ({ ...item, order })));
+    const store: InfoStore = { version: 2, linkGroups: normalizedGroups, sections: normalizedSections, systems: normalizedSystems, resources: normalizedResources };
     if (totalFileBytes(store) > TOTAL_FILE_LIMIT) store.resources = store.resources.map((item) => ({ ...item, blocks: item.blocks.filter((block) => block.type !== "file") }));
     return store;
   } catch { return null; }

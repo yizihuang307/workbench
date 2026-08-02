@@ -2,6 +2,7 @@
 
 > 对齐：`docs/idea.md` @ 2026-08-02
 > 本轮范围：信息模块资料详情编辑器；其他页面沿用现状。
+> 【链接】与【资料】列表页拆分方案见 `docs/links-resources-interaction.md`；本文件描述的资料编辑详情页在该方案中保持不变。
 
 ## 1. 目标与原则
 
@@ -20,7 +21,7 @@
 
 ### 布局
 
-1. 顶部工具行：返回、所属分区(仅展示，不支持下拉修改）、保存状态、删除(弹窗二次确认）关闭。
+1. 顶部工具行：返回、所属分区、保存状态、更多操作、关闭。
 2. 标题：单行输入；默认取正文完整首行，手动修改后停止自动覆盖。
 3. 文档编辑区：唯一主要输入区域，占满剩余空间。
 4. 空状态提示：“输入文字，或粘贴链接、拖入文件”。
@@ -43,7 +44,7 @@
 - `information-resource-editor-E-A-01` 返回总览：返回信息首页【呈现方式：`navigate`】，保留首页滚动位置。
 - `information-resource-editor-E-A-02` 所属分区：点击选择分区【呈现方式：`popover`】，选择后立即移动并 toast 提示。
 - `information-resource-editor-E-A-03` 保存状态：只读显示保存中、已保存、保存失败。
-- `information-resource-editor-E-A-04` 更多操作：【呈现方式：`popover`】，仅保留删除；二次弹窗确认。
+- `information-resource-editor-E-A-04` 更多操作：【呈现方式：`popover`】，仅保留删除；删除后提供 5 秒撤销，不弹确认框。
 - `information-resource-editor-E-A-05` 关闭：返回信息首页，焦点回到此前资料行。
 
 ## 4. 标题

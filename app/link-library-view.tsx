@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ALL_GROUP, infoId, safeUrl, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, type InfoStore, type LinkGroup, type LinkSortMode, type SystemItem } from "./information";
+import { ALL_GROUP, deleteLinkGroup, infoId, moveLink, reorderLinkGroups, safeUrl, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, type InfoStore, type LinkGroup, type LinkSortMode, type SystemItem } from "./information";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -18,11 +18,12 @@ function loadInitial() {
 }
 
 export default function LinkLibraryView({ store, setStore, storageError, onNotice }: Props) {
-  const initial = useRef(loadInitial());
+  const [initial] = useState(loadInitial);
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>(initial.current.view);
-  const [sortMode, setSortMode] = useState<LinkSortMode>(initial.current.sort);
-  const [activeGroup, setActiveGroup] = useState<string>(initial.current.group);
+  const [viewMode, setViewMode] = useState<ViewMode>(initial.view);
+  const [sortMode, setSortMode] = useState<LinkSortMode>(initial.sort);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<string>(initial.group);
   const [newSystem, setNewSystem] = useState(false);
   const [systemMenuId, setSystemMenuId] = useState<string | null>(null);
   const [editingSystemId, setEditingSystemId] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   // 关闭操作菜单
   useEffect(() => {
     function outside(event: PointerEvent) { if (!(event.target instanceof Element) || !event.target.closest(".system-row")) setSystemMenuId(null); }
-    function key(event: KeyboardEvent) { if (event.key === "Escape") { setSystemMenuId(null); setNewSystem(false); setGroupManageOpen(false); } }
+    function key(event: KeyboardEvent) { if (event.key === "Escape") { setSystemMenuId(null); setNewSystem(false); setEditingSystemId(null); setGroupManageOpen(false); setSortOpen(false); } }
     document.addEventListener("pointerdown", outside); document.addEventListener("keydown", key);
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", key); };
   });
@@ -61,33 +62,33 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
 
   function removeGroup(group: LinkGroup) {
     if (!window.confirm(`删除分组“${group.name}”？组内链接将移到“未分组”。`)) return;
-    setStore((current) => ({ ...current, linkGroups: current.linkGroups.filter((item) => item.id !== group.id).map((item, index) => ({ ...item, order: index })), systems: current.systems.map((item) => item.groupId === group.id ? { ...item, groupId: UNGROUPED } : item) }));
+    setStore((current) => deleteLinkGroup(current, group.id) || current);
     if (activeGroup === group.id) setActiveGroup(UNGROUPED);
     onNotice("分组已删除");
+  }
+  function commitGroupName(id: string, value: string, fallback: string) {
+    const name = value.trim().slice(0, 40);
+    if (!name || store.linkGroups.some((group) => group.id !== id && group.name === name)) {
+      onNotice(name ? "分组名称不能重复" : "分组名称不能为空");
+      setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((group) => group.id === id ? { ...group, name: fallback } : group) }));
+      return;
+    }
+    setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((group) => group.id === id ? { ...group, name } : group) }));
   }
 
   // 拖拽排序：列内重排 + 跨分组移动
   function onDropToItem(target: SystemItem) {
     if (!draggedId || draggedId === target.id) { setDraggedId(null); return; }
-    setStore((current) => {
-      const list = sortMode === "manual" ? [...current.systems].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt) : [...current.systems];
-      const fromIndex = list.findIndex((item) => item.id === draggedId);
-      const targetIndex = list.findIndex((item) => item.id === target.id);
-      if (fromIndex < 0 || targetIndex < 0) return current;
-      const [picked] = list.splice(fromIndex, 1);
-      list.splice(targetIndex, 0, picked);
-      // 若目标在不同分组，跟随目标分组
-      const moved = picked.groupId !== target.groupId ? { ...picked, groupId: target.groupId } : picked;
-      const reordered = list.map((item, index) => item.id === moved.id ? { ...moved, order: index } : { ...item, order: index });
-      return { ...current, systems: reordered };
-    });
+    if (sortMode !== "manual") { setDraggedId(null); return; }
+    setStore((current) => moveLink(current, draggedId, target.groupId, target.id) || current);
     setDraggedId(null);
   }
 
   // 拖到分组标签上 = 移动到该分组
   function onDropToGroup(groupId: string) {
     if (!draggedId) return;
-    setStore((current) => ({ ...current, systems: current.systems.map((item) => item.id === draggedId ? { ...item, groupId } : item) }));
+    if (sortMode !== "manual" || groupId === ALL_GROUP) { setDraggedId(null); return; }
+    setStore((current) => moveLink(current, draggedId, groupId) || current);
     setDraggedId(null);
   }
 
@@ -102,7 +103,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
     </header>
     <div className="info-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索链接名称或网址" aria-label="搜索链接" />
       <div className="link-sort">
-        {(["manual", "recent-open", "name"] as LinkSortMode[]).map((mode) => <button key={mode} className={sortMode === mode ? "active" : ""} onClick={() => setSortMode(mode)}>{mode === "manual" ? "手动" : mode === "recent-open" ? "最近打开" : "名称"}</button>)}
+        <div className="sort-menu-wrap"><button className="sort-trigger" onClick={() => setSortOpen((value) => !value)} aria-expanded={sortOpen}>排序：{sortMode === "manual" ? "手动" : sortMode === "recent-open" ? "最近打开" : "名称"}⌄</button>{sortOpen && <div className="sort-popover" role="menu">{(["manual", "recent-open", "name"] as LinkSortMode[]).map((mode) => <button key={mode} className={sortMode === mode ? "active" : ""} onClick={() => { setSortMode(mode); setSortOpen(false); }}>{mode === "manual" ? "手动排序" : mode === "recent-open" ? "最近打开" : "按名称"}</button>)}</div>}</div>
         <i />
         <button className={viewMode === "grid" ? "active" : ""} onClick={() => setViewMode("grid")} aria-label="网格视图">▦</button>
         <button className={viewMode === "list" ? "active" : ""} onClick={() => setViewMode("list")} aria-label="列表视图">☰</button>
@@ -115,13 +116,16 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
       <div className={`system-grid ${viewMode}`}>
         {results.map((item) => {
           const target = item.links.find((link) => link.id === item.defaultLinkId) || item.links[0];
-          return <article className="system-row" key={item.id} draggable onDragStart={() => setDraggedId(item.id)} onDragEnd={() => setDraggedId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); onDropToItem(item); }}>
+          return <article className="system-row" key={item.id} draggable={sortMode === "manual"} onDragStart={() => setDraggedId(item.id)} onDragEnd={() => setDraggedId(null)} onDragOver={(event) => { if (sortMode === "manual") event.preventDefault(); }} onDrop={(event) => { event.stopPropagation(); onDropToItem(item); }}>
             <button className="system-open" onClick={() => openLink(item)} title={item.name}>
               <b><i aria-hidden>{item.name.slice(0, 1).toUpperCase()}</i>{/^https?:\/\//.test(item.icon) && <img src={item.icon} alt="" onError={(event) => { const fallback = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(target.url).hostname)}&sz=64`; if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback; else event.currentTarget.style.display = "none"; }} />}</b>
               <span><HighlightText text={item.name} query={query} /></span>
               <small><HighlightText text={new URL(target.url).hostname} query={query} /></small>
             </button>
             <button className="system-remove" aria-label={`操作${item.name}`} aria-expanded={systemMenuId === item.id} onClick={() => setSystemMenuId((current) => current === item.id ? null : item.id)}>···</button>
+            <select className="system-move" value={item.groupId} onChange={(event) => setStore((current) => moveLink(current, item.id, event.target.value) || current)} aria-label={`移动“${item.name}”到其他分组`}>
+              <option value={UNGROUPED}>未分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+            </select>
             {systemMenuId === item.id && <div className="system-menu" role="menu">
               <button onClick={() => { setSystemMenuId(null); setEditingSystemId(item.id); }}>编辑名称和网址</button>
               <button className="danger" onClick={() => { setSystemMenuId(null); if (window.confirm(`确定删除“${item.name}”吗？`)) setStore((current) => ({ ...current, systems: current.systems.filter((system) => system.id !== item.id) })); }}>删除</button>
@@ -151,7 +155,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
       <h2>管理链接分组</h2>
       <div className="section-add"><input autoFocus value={draftGroup} maxLength={40} onChange={(event) => setDraftGroup(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addGroup()} placeholder="新分组名称" /><button onClick={addGroup}>新增分组</button></div>
       <div className="section-manage-row"><span>未分组</span><span>{store.systems.filter((item) => item.groupId === UNGROUPED).length} 项</span></div>
-      {groups.map((group) => <div className="section-manage-row" key={group.id}><input value={group.name} maxLength={40} onChange={(event) => setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((item) => item.id === group.id ? { ...item, name: event.target.value } : item) }))} /><span>{store.systems.filter((item) => item.groupId === group.id).length} 项</span><button className="section-delete" onClick={() => removeGroup(group)}>删除分组</button></div>)}
+      {groups.map((group, index) => <div className="section-manage-row" key={group.id}><input value={group.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = group.name; }} onChange={(event) => setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((item) => item.id === group.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitGroupName(group.id, event.currentTarget.value, event.currentTarget.dataset.original || group.name)} /><span>{store.systems.filter((item) => item.groupId === group.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && setStore((current) => reorderLinkGroups(current, group.id, groups[index - 1].id) || current)} disabled={index === 0} aria-label={`上移${group.name}`}>↑</button><button onClick={() => index < groups.length - 1 && setStore((current) => reorderLinkGroups(current, group.id, groups[index + 1].id, "after") || current)} disabled={index === groups.length - 1} aria-label={`下移${group.name}`}>↓</button></div><button className="section-delete" onClick={() => removeGroup(group)}>删除分组</button></div>)}
     </section></div>}
     {storageError && <p className="storage-warn">本地存储异常，改动可能无法保存</p>}
   </div>;

@@ -252,3 +252,41 @@ test("information link creation and search use the revised interaction", async (
   assert.match(view, /function HighlightText/);
   assert.match(css, /\.system-open mark, \.resource-main mark/);
 });
+
+test("resource board exposes tested manual category and cross-column movement", async () => {
+  const [view, model, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/resource-board-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(model, /export function reorderResourceSections/);
+  assert.match(model, /export function moveResource/);
+  assert.match(view, /reorderResourceSections/);
+  assert.match(view, /moveResource/);
+  assert.match(view, /draggable=\{sortMode === "manual"\}/);
+  assert.match(view, /移动“\$\{item\.title\}”到其他分类/);
+  assert.match(view, /aria-label=\{`上移\$\{section\.name\}`\}/);
+  assert.match(view, /aria-label=\{`下移\$\{section\.name\}`\}/);
+  assert.match(css, /\.board-column\.dragging/);
+  assert.match(css, /\.board-card-move/);
+});
+
+test("mobile resource board remains a fixed-width horizontal board", async () => {
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.board-columns \{[^}]*overflow-x: auto/s);
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.board-column \{[^}]*flex: 0 0 min\(82vw, 304px\)/s);
+});
+
+test("link grouping uses the same safe ordering primitives and disables drag outside manual mode", async () => {
+  const [view, model] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information.ts", import.meta.url), "utf8")),
+  ]);
+  assert.match(model, /export function reorderLinkGroups/);
+  assert.match(model, /export function moveLink/);
+  assert.match(model, /export function deleteLinkGroup/);
+  assert.match(view, /draggable=\{sortMode === "manual"\}/);
+  assert.match(view, /reorderLinkGroups/);
+  assert.match(view, /deleteLinkGroup/);
+  assert.match(view, /moveLink/);
+});
