@@ -13,14 +13,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "我的工作台 · 视觉方向",
-  description: "同一份安排首页的三种视觉方向对比。",
+  metadataBase: new URL("https://personal-workbench-visuals.yizi-huang307.chatgpt.site"),
+  title: "我的工作台",
+  description: "集中处理每日安排、工作记录与重要信息的个人工作中枢。",
   other: {
     "codex-preview": "development",
   },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
+  },
+  openGraph: {
+    title: "我的工作台",
+    description: "安排、记录与信息，一处完成。",
+    images: [{ url: "/og.png", width: 1736, height: 909, alt: "我的工作台" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "我的工作台",
+    description: "安排、记录与信息，一处完成。",
+    images: ["/og.png"],
   },
 };
 

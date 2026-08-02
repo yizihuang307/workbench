@@ -288,12 +288,12 @@ export default function Home() {
 
   return <main className="workbench" aria-busy={!ready}>
     <aside className="sidebar">
-      <div className="brand"><span>我</span><div><strong>我的工作台</strong></div></div>
+      <div className="brand"><span>W</span><div><strong>我的工作台</strong><small>PERSONAL OS</small></div></div>
       <nav aria-label="主导航">
-        <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span>01</span>安排</button>
-        <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span>02</span>记录</button>
-        <button className={activePage === "information" ? "active" : ""} onClick={() => setActivePage("information")}><span>03</span>信息</button>
-        <button onClick={() => document.getElementById("mood")?.focus()}><span>04</span>心情</button>
+        <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span aria-hidden>📅</span>安排</button>
+        <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span aria-hidden>📝</span>记录</button>
+        <button className={activePage === "information" ? "active" : ""} onClick={() => setActivePage("information")}><span aria-hidden>🔖</span>信息</button>
+        <button onClick={() => document.getElementById("mood")?.focus()}><span aria-hidden>🌤️</span>心情</button>
       </nav>
     </aside>
 

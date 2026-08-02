@@ -96,3 +96,18 @@ test("record count and AI action share the editor header", async () => {
   assert.match(css, /\.editor-category \{[^}]*min-height: 32px;[^}]*padding: 0 9px/);
   assert.doesNotMatch(view, /<footer><span>\{selected\.body\.length\}/);
 });
+
+test("modern violet design system and emoji navigation stay in place", async () => {
+  const [page, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(page, /<span aria-hidden>📅<\/span>安排/);
+  assert.match(page, /<span aria-hidden>📝<\/span>记录/);
+  assert.match(page, /<span aria-hidden>🔖<\/span>信息/);
+  assert.match(page, /<span aria-hidden>🌤️<\/span>心情/);
+  assert.match(css, /--violet-9:\s*#5b5bd6/);
+  assert.match(css, /--amber-9:\s*#ffc53d/);
+  assert.match(css, /--success-9:\s*#30a46c/);
+  assert.match(css, /backdrop-filter:\s*blur\(18px\)/);
+});
