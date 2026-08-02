@@ -740,12 +740,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 9px;
   font-size: 13px;
 }
+.info-search { min-height: 40px; margin-block: 14px; padding-inline: 12px; }
+.info-search > span { font-size: 18px; }
+.system-section > header, .resource-section > header { min-height: 56px; padding-block: 8px; }
 .system-section header button, .resource-section header button {
   width: var(--control-compact);
   height: var(--control-compact);
   border-radius: 9px;
   font-size: 18px;
 }
+.system-remove { width: var(--control-compact); height: var(--control-compact); }
+.system-menu button { min-height: var(--control-compact); font-size: 13px; }
 .view-all {
   min-height: var(--control-compact);
   padding-inline: 12px;
@@ -759,6 +764,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .workspace-close { width: var(--control-compact); height: var(--control-compact); }
 .resource-workspace select { min-height: 40px; border-radius: 9px; font-size: 13px; }
+.info-empty button, .link-block button {
+  min-height: var(--control-compact);
+  padding-inline: 11px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.block-actions { gap: 2px; }
+.block-actions button {
+  width: var(--control-compact);
+  height: var(--control-compact);
+  border-radius: 8px;
+}
+.file-block a {
+  min-height: var(--control-compact);
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 10px;
+  border: 1px solid var(--violet-5);
+  border-radius: 9px;
+  background: var(--violet-3);
+  font-size: 13px;
+  text-decoration: none;
+}
 .info-dialog { padding: 24px; }
 .info-dialog h2 { font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
 .info-dialog > input, .section-add input, .section-manage-row input {
@@ -790,6 +818,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   }
   .system-section header button, .resource-section header button,
   .workspace-close { width: var(--control-compact); height: var(--control-compact); }
+  .system-remove, .block-actions button { width: var(--control-compact); height: var(--control-compact); }
+  .info-search { min-height: var(--control-compact); }
+  .info-empty button, .link-block button, .file-block a { min-height: var(--control-compact); }
   .info-dialog { padding: 56px 18px 24px; }
   .info-dialog h2 { font-size: 22px; }
 }

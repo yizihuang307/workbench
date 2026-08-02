@@ -140,5 +140,8 @@ test("desktop information controls use the compact size system", async () => {
   assert.match(css, /\.system-section header button, \.resource-section header button \{[^}]*width: var\(--control-compact\)[^}]*height: var\(--control-compact\)/s);
   assert.match(css, /\.info-dialog footer button, \.section-add button \{[^}]*min-height: var\(--control-compact\)/s);
   assert.match(css, /\.info-dialog > input, \.section-add input, \.section-manage-row input \{[^}]*min-height: 40px/s);
+  assert.match(css, /\.info-search \{[^}]*min-height: 40px/s);
+  assert.match(css, /\.block-actions button \{[^}]*width: var\(--control-compact\)[^}]*height: var\(--control-compact\)/s);
+  assert.match(css, /\.file-block a \{[^}]*min-height: var\(--control-compact\)/s);
   assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.info-index button, \.info-manage,[\s\S]*min-height: var\(--control-compact\)/);
 });
