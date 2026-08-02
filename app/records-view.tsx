@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { applyAiResult, blocksText, moveAndDeleteCategory, recordBlocks, recordId, validCategoryName, visibleRecords, type RecordBlock, type RecordItem, type RecordStore } from "./records";
 
 type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; storageError: boolean; onNotice: (message: string) => void };
@@ -24,6 +25,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
   const [editorEpoch, setEditorEpoch] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moveMenuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const records = useMemo(() => visibleRecords(store, categoryId, query), [store, categoryId, query]);
@@ -32,13 +34,14 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
 
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (moveMenuCloseTimer.current) clearTimeout(moveMenuCloseTimer.current);
     undoTimers.current.forEach(clearTimeout);
   }, []);
 
 
   useEffect(() => {
     function closeMenu(event: MouseEvent) {
-      if (!(event.target instanceof Element) || !event.target.closest(".record-actions")) { setMenuId(null); setMoveMenuId(null); }
+      if (!(event.target instanceof Element) || (!event.target.closest(".record-actions") && !event.target.closest(".record-move-menu"))) { setMenuId(null); setMoveMenuId(null); }
     }
     function closeMenuByKey(event: KeyboardEvent) { if (event.key === "Escape") { setMenuId(null); setMoveMenuId(null); } }
     document.addEventListener("mousedown", closeMenu);
@@ -73,9 +76,21 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
   }
 
   function showMoveMenu(itemId: string, trigger: HTMLElement) {
+    if (moveMenuCloseTimer.current) clearTimeout(moveMenuCloseTimer.current);
     const rect = trigger.getBoundingClientRect();
-    setMoveMenuPosition({ top: rect.top, left: rect.right + 2 });
+    const menuWidth = 180;
+    const rightSide = rect.right + menuWidth <= window.innerWidth - 8;
+    setMoveMenuPosition({ top: Math.max(8, rect.top), left: rightSide ? rect.right - 1 : Math.max(8, rect.left - menuWidth + 1) });
     setMoveMenuId(itemId);
+  }
+
+  function scheduleMoveMenuClose() {
+    if (moveMenuCloseTimer.current) clearTimeout(moveMenuCloseTimer.current);
+    moveMenuCloseTimer.current = setTimeout(() => setMoveMenuId(null), 160);
+  }
+
+  function keepMoveMenuOpen() {
+    if (moveMenuCloseTimer.current) clearTimeout(moveMenuCloseTimer.current);
   }
 
 
@@ -166,7 +181,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
           {records.map((item) => { const lines = item.body.trim().split(/\n+/); const preview = lines.slice(1).join(" ") || lines[0] || "开始输入正文…"; return <article key={item.id} className={`record-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}>
             <button className={`pin ${item.pinned ? "active" : ""}`} onClick={(event) => { event.stopPropagation(); togglePinned(item); }} aria-label={item.pinned ? "取消置顶" : "置顶"} title={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
             <div><strong>{highlight(lines[0] || "新记录", query)}</strong><p>{highlight(preview, query)}</p>{recordBlocks(item).filter((block) => block.type === "image").length ? <small>含 {recordBlocks(item).filter((block) => block.type === "image").length} 张图片 · </small> : null}<small>{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>
-            <div className="record-actions"><button className="record-more" onClick={(event) => { event.stopPropagation(); const opening = menuId !== item.id; setMenuId(opening ? item.id : null); setMoveMenuId(null); }} aria-label="记录操作" title="记录操作">···</button>{menuId === item.id && <div className="record-menu" onClick={(event) => event.stopPropagation()} onMouseLeave={() => setMoveMenuId(null)}><button className="move-trigger" onMouseEnter={(event) => showMoveMenu(item.id, event.currentTarget)} onFocus={(event) => showMoveMenu(item.id, event.currentTarget)} onClick={(event) => showMoveMenu(item.id, event.currentTarget)} aria-haspopup="menu" aria-expanded={moveMenuId === item.id}>移动到 <span>›</span></button>{moveMenuId === item.id && <div className="record-move-menu" role="menu" style={{ top: moveMenuPosition.top, left: moveMenuPosition.left }}>{store.categories.filter((category) => category.id !== item.categoryId).map((category) => <button role="menuitem" key={category.id} onClick={() => moveRecord(item, category.id)}>{category.name}</button>)}</div>}<button className="danger" onClick={() => { setMenuId(null); setMoveMenuId(null); deleteRecord(item); }}>删除记录</button></div>}</div>
+            <div className="record-actions"><button className="record-more" onClick={(event) => { event.stopPropagation(); const opening = menuId !== item.id; setMenuId(opening ? item.id : null); setMoveMenuId(null); }} aria-label="记录操作" title="记录操作">···</button>{menuId === item.id && <div className="record-menu" onClick={(event) => event.stopPropagation()} onMouseLeave={scheduleMoveMenuClose}><button className="move-trigger" onMouseEnter={(event) => showMoveMenu(item.id, event.currentTarget)} onFocus={(event) => showMoveMenu(item.id, event.currentTarget)} onClick={(event) => showMoveMenu(item.id, event.currentTarget)} aria-haspopup="menu" aria-expanded={moveMenuId === item.id}>移动到 <span>›</span></button>{moveMenuId === item.id && createPortal(<div className="record-move-menu" role="menu" style={{ top: moveMenuPosition.top, left: moveMenuPosition.left }} onMouseEnter={keepMoveMenuOpen} onMouseLeave={scheduleMoveMenuClose} onClick={(event) => event.stopPropagation()}>{store.categories.filter((category) => category.id !== item.categoryId).map((category) => <button role="menuitem" key={category.id} onClick={() => moveRecord(item, category.id)}>{category.name}</button>)}</div>, document.body)}<button className="danger" onMouseEnter={() => setMoveMenuId(null)} onClick={() => { setMenuId(null); setMoveMenuId(null); deleteRecord(item); }}>删除记录</button></div>}</div>
           </article>; })}
           {!records.length && <div className="record-empty"><b>＋</b><p>{query ? "没有匹配的记录" : "这里还没有记录"}</p>{categoryId !== "all" && <button onClick={() => createRecord(categoryId)}>写下第一条</button>}</div>}
         </div>

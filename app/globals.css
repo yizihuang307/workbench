@@ -428,7 +428,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .record-menu .danger { margin-top: 2px; border-top: 1px solid var(--line); color: #a43b2c; }
 .record-menu .move-trigger { display: flex; align-items: center; justify-content: space-between; }
 .record-menu .move-trigger span { font-size: 15px; }
-.record-move-menu { position: fixed; z-index: 100; width: max-content; min-width: 88px; max-width: 180px; display: grid; padding: 3px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 2px 2px 0 rgba(36,34,31,.12); }
+.record-move-menu { position: fixed; z-index: 1000; width: max-content; min-width: 112px; max-width: 180px; display: grid; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.96); backdrop-filter: blur(18px) saturate(140%); box-shadow: var(--shadow-float); }
+.record-move-menu button { min-height: 36px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; font-size: 13px; text-align: left; white-space: nowrap; }
+.record-move-menu button:hover, .record-move-menu button:focus-visible { background: var(--violet-3); }
 .editor-category { min-height: 32px; display: inline-flex; align-items: center; padding: 0 9px; border: 1px solid var(--line); color: #68635b; font-size: 12px; line-height: 1; }
 .record-document-editor { min-height: 0; flex: 1; overflow: auto; padding: 24px; outline: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.8; }
 .record-document-editor:empty::before { color: #99948b; content: attr(data-placeholder); pointer-events: none; }
