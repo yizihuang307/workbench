@@ -16,6 +16,8 @@
 - [资料详情页交互方案](docs/interaction.md)
 - [链接与资料页面交互方案](docs/links-resources-interaction.md)
 - [链接与资料模块测试用例](docs/链接与资料模块测试用例.md)
+- [生产技术架构（Next.js＋Vercel＋Supabase）](docs/architecture.md)
+- [生产版完整测试与发布基线](docs/production-test-cases.md)
 - [链接与资料页面交互方案](docs/links-resources-interaction.md)
 - [已确认决策记录](docs/已确认决策记录.md)
 - [测试与发布记录](docs/测试与发布记录.md)
