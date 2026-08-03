@@ -1,30 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { deleteResourceSection, htmlText, infoId, moveResource, reorderResourceSections, totalFileBytes, visibleResources, type InfoSection, type InfoStore, type ResourceItem, type ResourceSortMode } from "./information";
+import { deleteResourceSection, htmlText, infoId, moveResource, reorderResourceSections, totalFileBytes, visibleResources, type InfoSection, type InfoStore, type ResourceItem } from "./information";
 import InformationEditor from "./information-editor";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
-const RESOURCES_VIEW_KEY = "workbench.resources.view.v1";
-
-function loadInitial() {
-  let sort: ResourceSortMode = "manual";
-  try { const raw = localStorage.getItem(RESOURCES_VIEW_KEY); if (raw) { const value = JSON.parse(raw); if (value.sort === "name" || value.sort === "updated") sort = value.sort; } } catch { /* 忽略 */ }
-  return { sort };
-}
-
 export default function ResourceBoardView({ store, setStore, storageError, onNotice }: Props) {
-  const [initial] = useState(loadInitial);
   const [query, setQuery] = useState("");
-  const [sortMode, setSortMode] = useState<ResourceSortMode>(initial.sort);
-  const [sortOpen, setSortOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [draftSection, setDraftSection] = useState("");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
+  const [dropSectionId, setDropSectionId] = useState<string | null>(null);
   const [deleted, setDeleted] = useState<ResourceItem | null>(null);
   const previousScroll = useRef(0);
   const draftId = useRef<string | null>(null);
@@ -34,12 +24,11 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   const sections = useMemo(() => [...store.sections].sort((a, b) => a.order - b.order), [store.sections]);
   const editing = store.resources.find((item) => item.id === editingId) ?? null;
 
-  useEffect(() => { try { localStorage.setItem(RESOURCES_VIEW_KEY, JSON.stringify({ sort: sortMode })); } catch { /* 忽略 */ } }, [sortMode]);
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
 
   // 全局搜索时退化为统一列表视图
   const searching = query.trim().length > 0;
-  const searchResults = useMemo(() => searching ? visibleResources(store, "all", query, sortMode) : [], [store, query, sortMode, searching]);
+  const searchResults = useMemo(() => searching ? visibleResources(store, "all", query, "manual") : [], [store, query, searching]);
 
   function openEditor(id: string) { previousScroll.current = window.scrollY; setEditingId(id); }
   function closeEditor() {
@@ -53,7 +42,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   }
 
   useEffect(() => {
-    function key(event: KeyboardEvent) { if (event.key === "Escape") { if (editingId) closeEditor(); else { setManageOpen(false); setSortOpen(false); } } }
+    function key(event: KeyboardEvent) { if (event.key === "Escape") { if (editingId) closeEditor(); else setManageOpen(false); } }
     document.addEventListener("keydown", key); return () => document.removeEventListener("keydown", key);
   });
 
@@ -108,13 +97,13 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
 
   // 卡片拖拽：列内排序 + 跨列移动
   function onDropToCard(target: ResourceItem) {
-    if (sortMode !== "manual" || !draggedId || draggedId === target.id) { setDraggedId(null); return; }
+    if (!draggedId || draggedId === target.id) { setDraggedId(null); return; }
     setStore((current) => moveResource(current, draggedId, target.sectionId, target.id) || current);
     setDraggedId(null);
   }
   // 拖到空白列 = 移动到该列末尾
   function onDropToColumn(sectionId: string) {
-    if (sortMode !== "manual" || !draggedId) return;
+    if (!draggedId) return;
     setStore((current) => moveResource(current, draggedId, sectionId) || current);
     setDraggedId(null);
   }
@@ -122,16 +111,12 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   if (editing) return <ResourceWorkspace item={editing} sections={sections} saveState={storageError ? "error" : saveState} fileBytes={totalFileBytes(store)} onClose={closeEditor} onDelete={() => deleteResource(editing)} onUpdate={(updater) => updateResource(editing.id, updater)} onNotice={onNotice} />;
 
   return <div className="resource-board">
-    <header className="info-toolbar">
-      <div className="info-index" aria-label="分区索引">{sections.map((section) => <button key={section.id} onClick={() => document.getElementById(`board-${section.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{section.name}</button>)}</div>
+    <header className="info-toolbar compact-toolbar">
+      <span />
       <button className="info-manage" onClick={() => setManageOpen(true)}>管理分区</button>
     </header>
-    <div className="info-search">
+    <div className="info-search search-only">
       <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索资料、链接或文件名" aria-label="搜索资料" />
-      <div className="sort-menu-wrap">
-        <button className="sort-trigger" onClick={() => setSortOpen((value) => !value)} aria-expanded={sortOpen}>排序：{sortMode === "manual" ? "手动" : sortMode === "name" ? "名称" : "更新时间"}⌄</button>
-        {sortOpen && <div className="sort-popover" role="menu">{(["manual", "name", "updated"] as ResourceSortMode[]).map((mode) => <button key={mode} className={sortMode === mode ? "active" : ""} onClick={() => { setSortMode(mode); setSortOpen(false); }}>{mode === "manual" ? "手动排序" : mode === "name" ? "按名称" : "按更新时间"}</button>)}</div>}
-      </div>
       <small>{searching ? `共 ${searchResults.length} 项` : ""}</small>
     </div>
 
@@ -143,14 +128,14 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
     ) : (
       <div className="board-columns">
         {sections.map((section) => {
-          const items = visibleResources(store, section.id, "", sortMode);
-          return <section className={`board-column ${draggedSectionId === section.id ? "dragging" : ""}`} key={section.id} id={`board-${section.id}`} onDragOver={(event) => { if (sortMode === "manual") event.preventDefault(); }} onDrop={(event) => { if (draggedSectionId) { const position = event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.getBoundingClientRect().width / 2 ? "after" : "before"; moveSection(draggedSectionId, section.id, position); setDraggedSectionId(null); } else onDropToColumn(section.id); }}>
-            <header className="board-column-header" draggable={sortMode === "manual"} onDragStart={(event) => { event.stopPropagation(); setDraggedId(null); setDraggedSectionId(section.id); }} onDragEnd={() => setDraggedSectionId(null)} title={sortMode === "manual" ? "拖动调整分类顺序" : "切换为手动排序后可拖动"}>
-              <div><h2>{section.name}</h2><span>{items.length}</span></div>
+          const items = visibleResources(store, section.id, "", "manual");
+          return <section className={`board-column${draggedSectionId === section.id ? " dragging" : ""}${dropSectionId === section.id ? " drop-target" : ""}`} key={section.id} id={`board-${section.id}`} onDragOver={(event) => { event.preventDefault(); setDropSectionId(section.id); }} onDragLeave={() => setDropSectionId((current) => current === section.id ? null : current)} onDrop={(event) => { if (draggedSectionId) { const position = event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.getBoundingClientRect().width / 2 ? "after" : "before"; moveSection(draggedSectionId, section.id, position); setDraggedSectionId(null); } else onDropToColumn(section.id); setDropSectionId(null); }}>
+            <header className="board-column-header" draggable onDragStart={(event) => { event.stopPropagation(); setDraggedId(null); setDraggedSectionId(section.id); }} onDragEnd={() => { setDraggedSectionId(null); setDropSectionId(null); }} title="拖动调整分类顺序">
+              <div><span className="drag-grip" aria-hidden>⠿</span><h2>{section.name}</h2><span>{items.length}</span></div>
               <button onClick={() => createResource(section.id)} aria-label={`在${section.name}中新建资料`}>＋</button>
             </header>
             <div className="board-column-body">
-              {items.map((item) => <article key={item.id} className="board-card" draggable={sortMode === "manual"} onDragStart={() => { setDraggedSectionId(null); setDraggedId(item.id); }} onDragEnd={() => setDraggedId(null)} onDragOver={(event) => { if (sortMode === "manual") event.preventDefault(); }} onDrop={(event) => { event.stopPropagation(); onDropToCard(item); }}>
+              {items.map((item) => <article key={item.id} className={`board-card${draggedId === item.id ? " dragging" : ""}`} draggable onDragStart={() => { setDraggedSectionId(null); setDraggedId(item.id); }} onDragEnd={() => { setDraggedId(null); setDropSectionId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); onDropToCard(item); }}><span className="drag-grip" aria-hidden>⠿</span>
                 <button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
                 <button className="board-card-main" onClick={() => openEditor(item.id)}>
                   <strong><HighlightText text={item.title} query="" /></strong>
@@ -172,7 +157,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
       <button className="info-dialog-close" onClick={() => setManageOpen(false)} aria-label="关闭">×</button>
       <h2>管理资料分区</h2>
       <div className="section-add"><input autoFocus value={draftSection} maxLength={40} onChange={(event) => setDraftSection(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSection()} placeholder="新分区名称" /><button onClick={addSection}>新增资料分区</button></div>
-      {sections.map((section, index) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = section.name; }} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitSectionName(section.id, event.currentTarget.value, event.currentTarget.dataset.original || section.name)} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && moveSection(section.id, sections[index - 1].id)} disabled={index === 0} aria-label={`上移${section.name}`}>↑</button><button onClick={() => index < sections.length - 1 && moveSection(section.id, sections[index + 1].id, "after")} disabled={index === sections.length - 1} aria-label={`下移${section.name}`}>↓</button></div><button className="section-delete" onClick={() => removeSection(section)} disabled={sections.length <= 1}>删除分区</button></div>)}
+      {sections.map((section, index) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = section.name; }} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitSectionName(section.id, event.currentTarget.value, event.currentTarget.dataset.original || section.name)} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && moveSection(section.id, sections[index - 1].id)} disabled={index === 0} aria-label={`上移${section.name}`}>↑</button><button onClick={() => index < sections.length - 1 && moveSection(section.id, sections[index + 1].id, "after")} disabled={index === sections.length - 1} aria-label={`下移${section.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => removeSection(section)} disabled={sections.length <= 1} aria-label={`删除${section.name}`}>×</button></div>)}
     </section></div>}
     {storageError && <p className="storage-warn">本地存储异常，改动可能无法保存</p>}
     {deleted && <div className="undo" role="status"><span>已删除“{deleted.title}”</span><button onClick={undoDelete}>撤销</button></div>}

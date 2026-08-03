@@ -226,7 +226,7 @@ test("information management exposes complete edit, move and delete actions", as
   assert.match(linkView, /aria-label="编辑常用链接"/);
   assert.match(linkView, /编辑名称和网址/);
   assert.match(linkView, /deleteLinkGroup/);
-  assert.match(resourceView, /删除分区/);
+  assert.match(resourceView, /className="section-delete compact-delete"/);
   assert.match(resourceView, /deleteResourceSection/);
   assert.match(css, /\.sort-popover \{[^}]*z-index: 30/);
 });
@@ -236,7 +236,7 @@ test("information search is a single direct input without a decorative outer box
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
-  assert.match(view, /<div className="info-search"><input/);
+  assert.match(view, /<div className="info-search search-only"><input/);
   assert.doesNotMatch(view, /<label className="info-search"><span/);
   assert.match(css, /\.info-search \{[^}]*border: 0/);
   assert.match(css, /\.info-search input \{[^}]*border: 1px solid/);
@@ -265,7 +265,7 @@ test("resource board exposes tested manual category and cross-column movement", 
   assert.match(model, /export function moveResource/);
   assert.match(view, /reorderResourceSections/);
   assert.match(view, /moveResource/);
-  assert.match(view, /draggable=\{sortMode === "manual"\}/);
+  assert.match(view, /className=\{`board-card\$\{draggedId === item\.id \? " dragging"/);
   assert.match(view, /移动“\$\{item\.title\}”到其他分类/);
   assert.match(view, /aria-label=\{`上移\$\{section\.name\}`\}/);
   assert.match(view, /aria-label=\{`下移\$\{section\.name\}`\}/);
@@ -279,7 +279,7 @@ test("mobile resource board remains a fixed-width horizontal board", async () =>
   assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*\.board-column \{[^}]*flex: 0 0 min\(82vw, 304px\)/s);
 });
 
-test("link grouping uses the same safe ordering primitives and disables drag outside manual mode", async () => {
+test("link grouping uses the same safe ordering primitives and manual drag state", async () => {
   const [view, model] = await Promise.all([
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information.ts", import.meta.url), "utf8")),
@@ -287,8 +287,28 @@ test("link grouping uses the same safe ordering primitives and disables drag out
   assert.match(model, /export function reorderLinkGroups/);
   assert.match(model, /export function moveLink/);
   assert.match(model, /export function deleteLinkGroup/);
-  assert.match(view, /draggable=\{sortMode === "manual"\}/);
+  assert.match(view, /className=\{`system-row\$\{draggedId === item\.id \? " dragging"/);
   assert.match(view, /reorderLinkGroups/);
   assert.match(view, /deleteLinkGroup/);
   assert.match(view, /moveLink/);
+});
+
+test("links and resources use compact manual boards without redundant tabs or sort controls", async () => {
+  const [links, resources] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/resource-board-view.tsx", import.meta.url), "utf8")),
+  ]);
+  assert.doesNotMatch(links, />排序：|aria-label="网格视图"|aria-label="列表视图"|aria-label="分组索引"/);
+  assert.doesNotMatch(resources, />排序：|aria-label="分区索引"/);
+  assert.match(links, /className="link-columns"/);
+  assert.match(links, /className=\{`link-column/);
+  assert.match(links, /draggedId === item\.id \? " dragging"/);
+  assert.match(resources, /draggedId === item\.id \? " dragging"/);
+});
+
+test("information hydration and cross-tab sync do not write stale data back", async () => {
+  const page = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8"));
+  assert.match(page, /const suppressInfoSave = useRef\(false\)/);
+  assert.match(page, /suppressInfoSave\.current = true; setInfoStore\(parsedInfo\)/);
+  assert.match(page, /if \(suppressInfoSave\.current\) \{ suppressInfoSave\.current = false; return; \}/);
 });
