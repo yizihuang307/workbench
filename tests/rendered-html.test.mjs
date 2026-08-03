@@ -68,6 +68,10 @@ test("schedule exposes completion history with daily and weekly views", async ()
   assert.match(page, /className="area-header-actions"/);
   assert.match(page, /type="date"/);
   assert.match(page, /aria-label="选择完成记录日期"/);
+  assert.match(page, /WEEKDAY_SLOGANS\[today\.getDay\(\)\]/);
+  assert.match(page, /蓄力开新局，万事皆顺意/);
+  assert.match(page, /敛神蓄气力，前路自可期/);
+  assert.match(css, /\.hero-intro > p \{ font-size: 14px; \}/);
   assert.doesNotMatch(page, />回到今天<\/button>/);
   assert.match(page, /className="history-item-title"/);
   assert.match(css, /\.history-list article \{[^}]*grid-template-columns: 24px minmax\(0,1fr\) auto/s);

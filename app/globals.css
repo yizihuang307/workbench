@@ -122,6 +122,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 96px; padding: 15px 0 18px; border-bottom: 1px solid var(--ink); }
 .hero-intro { min-width: 0; }
 .hero p { margin: 0 0 7px; color: var(--cobalt); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.hero-intro > p { font-size: 14px; }
 .hero h1 { margin: 0; font-size: clamp(25px, 2.35vw, 34px); line-height: 1.2; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; }
 .hero-tools { display: flex; align-items: flex-end; gap: 12px; }
 .mood-block small { display: block; margin-bottom: 7px; color: #666158; font-size: 12px; text-align: left; }

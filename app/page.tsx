@@ -334,7 +334,7 @@ export default function Home() {
     {activePage === "schedule" ? <section className="content">
       <div className="page">
         <header className="hero">
-          <div className="hero-intro"><p>{dateLabel}</p><h1>今天，先完成真正重要的事。</h1></div>
+          <div className="hero-intro"><p>{dateLabel}</p><h1>{WEEKDAY_SLOGANS[today.getDay()]}</h1></div>
           <div className="hero-tools">
             {/* 心情模块暂时隐藏：保留 Mood 组件与本地数据，便于后续恢复。 */}
             <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
@@ -367,6 +367,15 @@ export default function Home() {
 }
 
 const SOURCE_NAME: Record<Group, string> = { today: "来自今日", week: "来自本周", later: "来自后续" };
+const WEEKDAY_SLOGANS = [
+  "敛神蓄气力，前路自可期",
+  "蓄力开新局，万事皆顺意",
+  "稳住节奏走，好运常相守",
+  "熬过小疲惫，惊喜在周围",
+  "再坚持一程，好事快登门",
+  "认真收尾忙，周末有蜜糖",
+  "闲享好时光，喜乐日日长",
+];
 
 function CompletionHistory({ history }: { history: CompletionRecord[] }) {
   const [mode, setMode] = useState<"day" | "week">("day");
