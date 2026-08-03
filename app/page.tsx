@@ -114,6 +114,7 @@ export default function Home() {
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressInfoSave = useRef(false);
+  const infoStoreRef = useRef(infoStore);
   const expandButtons = useRef<Partial<Record<Group, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
@@ -132,14 +133,13 @@ export default function Home() {
       }
       if (parsedRecords) setRecordStore(parsedRecords);
       else if (recordRaw) setNotice("记录数据无法读取，已保留安全的空记录库");
-      if (parsedInfo) { suppressInfoSave.current = true; setInfoStore(parsedInfo); }
+      if (parsedInfo) { suppressInfoSave.current = true; infoStoreRef.current = parsedInfo; setInfoStore(parsedInfo); }
       setReady(true);
     })();
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    if (suppressInfoSave.current) { suppressInfoSave.current = false; return; }
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...store, savedDate: localDate() }));
     } catch {
@@ -155,6 +155,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!ready) return;
+    if (suppressInfoSave.current) { suppressInfoSave.current = false; return; }
     let active = true;
     void saveInfoStore(infoStore).then(() => {
       if (!active) return;
@@ -163,6 +164,8 @@ export default function Home() {
     }).catch(() => { if (active) { setInfoStorageError(true); setNotice("信息保存失败，请清理浏览器空间后重试"); } });
     return () => { active = false; };
   }, [ready, infoStore]);
+
+  useEffect(() => { infoStoreRef.current = infoStore; }, [infoStore]);
 
   useEffect(() => {
     function sync(event: StorageEvent) {
@@ -196,10 +199,16 @@ export default function Home() {
   useEffect(() => {
     function syncInfo(event: StorageEvent) {
       if (event.key !== INFO_SYNC_KEY || !event.newValue) return;
-      void loadInfoStore().then((parsed) => { if (parsed) { suppressInfoSave.current = true; setInfoStore(parsed); setNotice("已同步另一标签页的信息修改"); } });
+      void loadInfoStore().then((parsed) => {
+        if (!parsed || JSON.stringify(parsed) === JSON.stringify(infoStoreRef.current)) return;
+        suppressInfoSave.current = true;
+        infoStoreRef.current = parsed;
+        setInfoStore(parsed);
+        setNotice("已同步另一标签页的信息修改");
+      });
     }
     window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
-  }, [activePage]);
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen));

@@ -335,8 +335,10 @@ test("links and resources use compact manual boards without redundant tabs or so
 test("information hydration and cross-tab sync do not write stale data back", async () => {
   const page = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8"));
   assert.match(page, /const suppressInfoSave = useRef\(false\)/);
-  assert.match(page, /suppressInfoSave\.current = true; setInfoStore\(parsedInfo\)/);
+  assert.match(page, /const infoStoreRef = useRef\(infoStore\)/);
+  assert.match(page, /suppressInfoSave\.current = true; infoStoreRef\.current = parsedInfo; setInfoStore\(parsedInfo\)/);
   assert.match(page, /if \(suppressInfoSave\.current\) \{ suppressInfoSave\.current = false; return; \}/);
+  assert.match(page, /JSON\.stringify\(parsed\) === JSON\.stringify\(infoStoreRef\.current\)/);
 });
 
 test("shared information controls match the record interaction pattern", async () => {
