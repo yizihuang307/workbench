@@ -300,10 +300,10 @@ export default function Home() {
     <aside className="sidebar">
       <div className="brand"><span>W</span><div><strong>我的工作台</strong><small>PERSONAL OS</small></div></div>
       <nav aria-label="主导航">
-        <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span aria-hidden>📅</span>安排</button>
-        <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span aria-hidden>📝</span>记录</button>
-        <button className={activePage === "links" ? "active" : ""} onClick={() => setActivePage("links")}><span aria-hidden>🔗</span>链接</button>
-        <button className={activePage === "resources" ? "active" : ""} onClick={() => setActivePage("resources")}><span aria-hidden>📚</span>资料</button>
+        <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span aria-hidden>📅</span>今日事</button>
+        <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span aria-hidden>📝</span>随手记</button>
+        <button className={activePage === "links" ? "active" : ""} onClick={() => setActivePage("links")}><span aria-hidden>🔗</span>传送门</button>
+        <button className={activePage === "resources" ? "active" : ""} onClick={() => setActivePage("resources")}><span aria-hidden>📚</span>资料库</button>
         {/* 心情模块暂时隐藏：恢复时重新启用导航入口。 */}
       </nav>
     </aside>

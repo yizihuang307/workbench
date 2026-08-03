@@ -32,14 +32,28 @@ test("renders development preview metadata", async () => {
   assert.match(await response.text(), developmentPreviewMeta);
 });
 
-test("renders the records navigation entry as available", async () => {
+test("renders the notes navigation entry as available", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("records", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
   const response = await worker.fetch(new Request("http://localhost/"), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
   const html = await response.text();
-  assert.match(html, />记录</);
+  assert.match(html, />随手记</);
   assert.doesNotMatch(html, /记录功能即将开放/);
+});
+
+test("navigation and information page slogans use the confirmed names", async () => {
+  const [page, links, resources] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/resource-board-view.tsx", import.meta.url), "utf8")),
+  ]);
+  assert.match(page, />今日事<\/button>/);
+  assert.match(page, />随手记<\/button>/);
+  assert.match(page, />传送门<\/button>/);
+  assert.match(page, />资料库<\/button>/);
+  assert.match(links, /链接存到位，效率翻一倍/);
+  assert.match(resources, /知识常积攒，好运常相伴/);
 });
 
 test("AI organizer fails safely when the server key is absent", async () => {
@@ -108,10 +122,10 @@ test("modern violet design system and active navigation stay in place", async ()
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
-  assert.match(page, /<span aria-hidden>📅<\/span>安排/);
-  assert.match(page, /<span aria-hidden>📝<\/span>记录/);
-  assert.match(page, /<span aria-hidden>🔗<\/span>链接/);
-  assert.match(page, /<span aria-hidden>📚<\/span>资料/);
+  assert.match(page, /<span aria-hidden>📅<\/span>今日事/);
+  assert.match(page, /<span aria-hidden>📝<\/span>随手记/);
+  assert.match(page, /<span aria-hidden>🔗<\/span>传送门/);
+  assert.match(page, /<span aria-hidden>📚<\/span>资料库/);
   assert.doesNotMatch(page, /<span aria-hidden>🌤️<\/span>心情/);
   assert.doesNotMatch(page, /<div className="mood-block">/);
   assert.match(page, /心情模块暂时隐藏/);
