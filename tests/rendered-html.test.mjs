@@ -228,6 +228,13 @@ test("information management exposes complete edit, move and delete actions", as
   assert.match(linkView, /deleteLinkGroup/);
   assert.match(resourceView, /className="section-delete compact-delete"/);
   assert.match(resourceView, /deleteResourceSection/);
+  assert.match(resourceView, /role="alertdialog"/);
+  assert.match(resourceView, /className="resource-actions-menu"/);
+  assert.match(resourceView, /确认删除/);
+  assert.match(resourceView, /迁移并删除分区/);
+  assert.match(linkView, /迁移并删除分组/);
+  assert.doesNotMatch(resourceView, /className="board-card-move"/);
+  assert.doesNotMatch(linkView, /className="system-move"/);
   assert.match(css, /\.sort-popover \{[^}]*z-index: 30/);
 });
 
@@ -251,6 +258,7 @@ test("information link creation and search use the revised interaction", async (
   assert.doesNotMatch(view, /粘贴网址后，将自动识别网站名称和 Logo/);
   assert.match(view, /<span>名称<\/span>/);
   assert.match(view, /自动填充，可修改/);
+  assert.match(view, /nameEditedRef\.current/);
   assert.match(view, /function HighlightText/);
   assert.match(css, /\.system-open mark, \.resource-main mark/);
 });
@@ -266,11 +274,11 @@ test("resource board exposes tested manual category and cross-column movement", 
   assert.match(view, /reorderResourceSections/);
   assert.match(view, /moveResource/);
   assert.match(view, /className=\{`board-card\$\{draggedId === item\.id \? " dragging"/);
-  assert.match(view, /移动“\$\{item\.title\}”到其他分类/);
+  assert.match(view, /className="resource-actions-menu"/);
   assert.match(view, /aria-label=\{`上移\$\{section\.name\}`\}/);
   assert.match(view, /aria-label=\{`下移\$\{section\.name\}`\}/);
   assert.match(css, /\.board-column\.dragging/);
-  assert.match(css, /\.board-card-move/);
+  assert.match(css, /\.resource-actions-menu/);
 });
 
 test("mobile resource board remains a fixed-width horizontal board", async () => {
@@ -304,6 +312,8 @@ test("links and resources use compact manual boards without redundant tabs or so
   assert.match(links, /className=\{`link-column/);
   assert.match(links, /draggedId === item\.id \? " dragging"/);
   assert.match(resources, /draggedId === item\.id \? " dragging"/);
+  const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
+  assert.match(css, /\.link-column \.system-row \{[^}]*background: #fff/);
 });
 
 test("information hydration and cross-tab sync do not write stale data back", async () => {

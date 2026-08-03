@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { deleteResourceSection, htmlText, infoId, moveResource, reorderResourceSections, totalFileBytes, visibleResources, type InfoSection, type InfoStore, type ResourceItem } from "./information";
 import InformationEditor from "./information-editor";
 
@@ -16,6 +17,10 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
   const [dropSectionId, setDropSectionId] = useState<string | null>(null);
   const [deleted, setDeleted] = useState<ResourceItem | null>(null);
+  const [resourceMenu, setResourceMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ResourceItem | null>(null);
+  const [deleteSectionId, setDeleteSectionId] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState("");
   const previousScroll = useRef(0);
   const draftId = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,8 +47,9 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   }
 
   useEffect(() => {
-    function key(event: KeyboardEvent) { if (event.key === "Escape") { if (editingId) closeEditor(); else setManageOpen(false); } }
-    document.addEventListener("keydown", key); return () => document.removeEventListener("keydown", key);
+    function key(event: KeyboardEvent) { if (event.key === "Escape") { setResourceMenu(null); setDeleteTarget(null); setDeleteSectionId(null); if (editingId) closeEditor(); else setManageOpen(false); } }
+    function outside(event: PointerEvent) { if (!(event.target instanceof Element) || !event.target.closest(".resource-actions-menu, .board-card-more")) setResourceMenu(null); }
+    document.addEventListener("keydown", key); document.addEventListener("pointerdown", outside); return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", outside); };
   });
 
   function updateResource(id: string, updater: (item: ResourceItem) => ResourceItem) {
@@ -62,6 +68,8 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
     if (undoTimer.current) clearTimeout(undoTimer.current);
     undoTimer.current = setTimeout(() => setDeleted(null), 5000);
   }
+  function requestDeleteResource(item: ResourceItem) { setResourceMenu(null); setDeleteTarget(item); }
+  function confirmDeleteResource() { if (!deleteTarget) return; const item = deleteTarget; setDeleteTarget(null); deleteResource(item); }
   function undoDelete() {
     if (!deleted) return;
     setStore((current) => ({ ...current, resources: [deleted, ...current.resources] }));
@@ -73,13 +81,16 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
     if (!name || store.sections.some((section) => section.name === name)) { onNotice(name ? "分区名称不能重复" : "分区名称不能为空"); return; }
     setStore((current) => ({ ...current, sections: [...current.sections, { id: infoId(), name, type: "resources", order: current.sections.length, createdAt: Date.now() }] })); setDraftSection("");
   }
-  function removeSection(section: InfoSection) {
+  function requestRemoveSection(section: InfoSection) {
     const target = sections.find((item) => item.id !== section.id);
     if (!target) { onNotice("至少需要保留一个资料分区"); return; }
-    const count = store.resources.filter((item) => item.sectionId === section.id).length;
-    if (!window.confirm(count ? `删除“${section.name}”后，其中 ${count} 项资料将移到“${target.name}”。是否继续？` : `确定删除空分区“${section.name}”吗？`)) return;
-    setStore((current) => deleteResourceSection(current, section.id, target.id) || current);
-    onNotice(count ? `分区已删除，${count} 项资料已移到“${target.name}”` : "分区已删除");
+    setManageOpen(false); setDeleteSectionId(section.id); setMoveTarget(target.id);
+  }
+  function confirmRemoveSection() {
+    if (!deleteSectionId || !moveTarget) return;
+    const count = store.resources.filter((item) => item.sectionId === deleteSectionId).length;
+    setStore((current) => deleteResourceSection(current, deleteSectionId, moveTarget) || current);
+    setDeleteSectionId(null); setMoveTarget(""); onNotice(count ? `分区已删除，${count} 项资料已迁移` : "分区已删除");
   }
 
   function moveSection(dragged: string, target: string, position: "before" | "after" = "before") {
@@ -108,7 +119,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
     setDraggedId(null);
   }
 
-  if (editing) return <ResourceWorkspace item={editing} sections={sections} saveState={storageError ? "error" : saveState} fileBytes={totalFileBytes(store)} onClose={closeEditor} onDelete={() => deleteResource(editing)} onUpdate={(updater) => updateResource(editing.id, updater)} onNotice={onNotice} />;
+  if (editing) return <><ResourceWorkspace item={editing} sections={sections} saveState={storageError ? "error" : saveState} fileBytes={totalFileBytes(store)} onClose={closeEditor} onDelete={() => requestDeleteResource(editing)} onUpdate={(updater) => updateResource(editing.id, updater)} onNotice={onNotice} />{deleteTarget && <ConfirmDelete title="删除资料" text={`确定删除“${deleteTarget.title}”吗？删除后仍可在 5 秒内撤销。`} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDeleteResource} />}</>;
 
   return <div className="resource-board">
     <header className="info-toolbar compact-toolbar">
@@ -122,7 +133,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
 
     {searching ? (
       <div className="resource-search-list">
-        {searchResults.map((item) => <ResourceRow key={item.id} item={item} query={query} onOpen={() => openEditor(item.id)} onPin={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} />)}
+        {searchResults.map((item) => <ResourceRow key={item.id} item={item} query={query} onOpen={() => openEditor(item.id)} onPin={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} onMenu={(button) => { const rect = button.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 156) }); }} />)}
         {!searchResults.length && <div className="info-empty"><span>没有匹配结果</span></div>}
       </div>
     ) : (
@@ -142,9 +153,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
                   <span>{item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ") || "开始添加内容"}</span>
                   <small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small>
                 </button>
-                <select className="board-card-move" value={item.sectionId} onChange={(event) => setStore((current) => moveResource(current, item.id, event.target.value) || current)} aria-label={`移动“${item.title}”到其他分类`}>
-                  {sections.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-                </select>
+                <button className="board-card-more" aria-label={`操作${item.title}`} aria-expanded={resourceMenu?.id === item.id} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 156) }); }}>···</button>
               </article>)}
               {!items.length && <div className="board-column-empty"><span>拖动卡片到这里，或点上方＋新建</span></div>}
             </div>
@@ -157,16 +166,21 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
       <button className="info-dialog-close" onClick={() => setManageOpen(false)} aria-label="关闭">×</button>
       <h2>管理资料分区</h2>
       <div className="section-add"><input autoFocus value={draftSection} maxLength={40} onChange={(event) => setDraftSection(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSection()} placeholder="新分区名称" /><button onClick={addSection}>新增资料分区</button></div>
-      {sections.map((section, index) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = section.name; }} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitSectionName(section.id, event.currentTarget.value, event.currentTarget.dataset.original || section.name)} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && moveSection(section.id, sections[index - 1].id)} disabled={index === 0} aria-label={`上移${section.name}`}>↑</button><button onClick={() => index < sections.length - 1 && moveSection(section.id, sections[index + 1].id, "after")} disabled={index === sections.length - 1} aria-label={`下移${section.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => removeSection(section)} disabled={sections.length <= 1} aria-label={`删除${section.name}`}>×</button></div>)}
+      {sections.map((section, index) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = section.name; }} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitSectionName(section.id, event.currentTarget.value, event.currentTarget.dataset.original || section.name)} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && moveSection(section.id, sections[index - 1].id)} disabled={index === 0} aria-label={`上移${section.name}`}>↑</button><button onClick={() => index < sections.length - 1 && moveSection(section.id, sections[index + 1].id, "after")} disabled={index === sections.length - 1} aria-label={`下移${section.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => requestRemoveSection(section)} disabled={sections.length <= 1} aria-label={`删除${section.name}`}>×</button></div>)}
     </section></div>}
+    {resourceMenu && createPortal(<div className="resource-actions-menu" style={{ top: resourceMenu.top, left: resourceMenu.left }} role="menu"><span>移动到</span>{sections.filter((section) => store.resources.find((item) => item.id === resourceMenu.id)?.sectionId !== section.id).map((section) => <button key={section.id} onClick={() => { setStore((current) => moveResource(current, resourceMenu.id, section.id) || current); setResourceMenu(null); }}>{section.name}</button>)}<i /><button className="danger" onClick={() => { const item = store.resources.find((value) => value.id === resourceMenu.id); if (item) requestDeleteResource(item); }}>删除资料</button></div>, document.body)}
+    {deleteTarget && <ConfirmDelete title="删除资料" text={`确定删除“${deleteTarget.title}”吗？删除后仍可在 5 秒内撤销。`} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDeleteResource} />}
+    {deleteSectionId && <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="迁移并删除资料分区"><button className="info-dialog-close" onClick={() => setDeleteSectionId(null)} aria-label="关闭">×</button><h2>迁移并删除分区</h2><div className="category-delete-dialog"><p>先选择资料要迁移到的分区，再删除“{sections.find((item) => item.id === deleteSectionId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>{sections.filter((item) => item.id !== deleteSectionId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteSectionId(null)}>取消</button><button className="danger" onClick={confirmRemoveSection}>迁移并删除</button></footer></div></section></div>}
     {storageError && <p className="storage-warn">本地存储异常，改动可能无法保存</p>}
     {deleted && <div className="undo" role="status"><span>已删除“{deleted.title}”</span><button onClick={undoDelete}>撤销</button></div>}
   </div>;
 }
 
-function ResourceRow({ item, query, onOpen, onPin }: { item: ResourceItem; query: string; onOpen: () => void; onPin: () => void }) {
+function ConfirmDelete({ title, text, onCancel, onConfirm }: { title: string; text: string; onCancel: () => void; onConfirm: () => void }) { return <div className="info-dialog-backdrop"><section className="info-dialog small" role="alertdialog" aria-modal="true" aria-label={title}><button className="info-dialog-close" onClick={onCancel} aria-label="关闭">×</button><h2>{title}</h2><div className="confirm-delete"><p>{text}</p><footer><button onClick={onCancel}>取消</button><button className="danger" onClick={onConfirm}>确认删除</button></footer></div></section></div>; }
+
+function ResourceRow({ item, query, onOpen, onPin, onMenu }: { item: ResourceItem; query: string; onOpen: () => void; onPin: () => void; onMenu: (button: HTMLButtonElement) => void }) {
   const summary = item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ");
-  return <article className="resource-row"><button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={onPin} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button><button className="resource-main" onClick={onOpen}><strong><HighlightText text={item.title} query={query} /></strong><span><HighlightText text={summary || "开始添加内容"} query={query} /></span><small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small></button></article>;
+  return <article className="resource-row"><button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={onPin} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button><button className="resource-main" onClick={onOpen}><strong><HighlightText text={item.title} query={query} /></strong><span><HighlightText text={summary || "开始添加内容"} query={query} /></span><small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small></button><button className="board-card-more" aria-label={`操作${item.title}`} onClick={(event) => onMenu(event.currentTarget)}>···</button></article>;
 }
 
 function HighlightText({ text, query }: { text: string; query: string }) {

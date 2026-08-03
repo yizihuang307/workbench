@@ -216,12 +216,12 @@ export function reorderLinkGroups(store: InfoStore, draggedId: string, targetId:
   return { ...store, linkGroups: groups.map((item, order) => ({ ...item, order })) };
 }
 
-export function deleteLinkGroup(store: InfoStore, groupId: string) {
-  if (!store.linkGroups.some((group) => group.id === groupId)) return null;
+export function deleteLinkGroup(store: InfoStore, groupId: string, targetGroupId = UNGROUPED) {
+  if (!store.linkGroups.some((group) => group.id === groupId) || groupId === targetGroupId || (targetGroupId !== UNGROUPED && !store.linkGroups.some((group) => group.id === targetGroupId))) return null;
   return {
     ...store,
     linkGroups: store.linkGroups.filter((group) => group.id !== groupId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((group, order) => ({ ...group, order })),
-    systems: store.systems.map((item) => item.groupId === groupId ? { ...item, groupId: UNGROUPED } : item),
+    systems: store.systems.map((item) => item.groupId === groupId ? { ...item, groupId: targetGroupId } : item),
   };
 }
 

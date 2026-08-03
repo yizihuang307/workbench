@@ -16,6 +16,8 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
   const [dropGroupId, setDropGroupId] = useState<string | null>(null);
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState(UNGROUPED);
 
   const groups = useMemo(() => [...store.linkGroups].sort((a, b) => a.order - b.order), [store.linkGroups]);
   const editingSystem = store.systems.find((item) => item.id === editingSystemId) ?? null;
@@ -42,11 +44,15 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
     setDraftGroup("");
   }
 
-  function removeGroup(group: LinkGroup) {
-    if (!window.confirm(`删除分组“${group.name}”？组内链接将移到“未分组”。`)) return;
-    setStore((current) => deleteLinkGroup(current, group.id) || current);
-    if (activeGroup === group.id) setActiveGroup(UNGROUPED);
-    onNotice("分组已删除");
+  function requestRemoveGroup(group: LinkGroup) {
+    const target = [UNGROUPED, ...groups.map((item) => item.id)].find((id) => id !== group.id) ?? UNGROUPED;
+    setGroupManageOpen(false); setDeleteGroupId(group.id); setMoveTarget(target);
+  }
+  function confirmRemoveGroup() {
+    if (!deleteGroupId && deleteGroupId !== "") return;
+    setStore((current) => deleteLinkGroup(current, deleteGroupId, moveTarget) || current);
+    if (activeGroup === deleteGroupId) setActiveGroup(moveTarget);
+    setDeleteGroupId(null); onNotice("分组已迁移并删除");
   }
   function commitGroupName(id: string, value: string, fallback: string) {
     const name = value.trim().slice(0, 40);
@@ -83,7 +89,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
     <div className="link-columns">
       {[{ id: UNGROUPED, name: "未分组", order: -1, createdAt: 0 }, ...groups].map((group) => {
         const items = visibleLinks(store, group.id, query, "manual");
-        return <section key={group.id || "ungrouped"} className={`link-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId && group.id) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(group.id); setDraggedGroupId(null); setDropGroupId(null); }}>
+        return <section key={group.id || "ungrouped"} className={`link-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""} ${systemMenuId && items.some((item) => item.id === systemMenuId) ? " menu-open" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId && group.id) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(group.id); setDraggedGroupId(null); setDropGroupId(null); }}>
           <header className="link-column-header" draggable={Boolean(group.id)} onDragStart={(event) => { event.stopPropagation(); setDraggedId(null); setDraggedGroupId(group.id); }} onDragEnd={() => { setDraggedGroupId(null); setDropGroupId(null); }}><div><span className="drag-grip" aria-hidden>⠿</span><h2>{group.name}</h2><small>{items.length}</small></div><button onClick={() => { setActiveGroup(group.id); setNewSystem(true); }} aria-label={`在${group.name}新增链接`}>＋</button></header>
           <div className="link-column-body">
         {items.map((item) => {
@@ -96,10 +102,8 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
               <small><HighlightText text={new URL(target.url).hostname} query={query} /></small>
             </button>
             <button className="system-remove" aria-label={`操作${item.name}`} aria-expanded={systemMenuId === item.id} onClick={() => setSystemMenuId((current) => current === item.id ? null : item.id)}>···</button>
-            <select className="system-move" value={item.groupId} onChange={(event) => setStore((current) => moveLink(current, item.id, event.target.value) || current)} aria-label={`移动“${item.name}”到其他分组`}>
-              <option value={UNGROUPED}>未分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-            </select>
             {systemMenuId === item.id && <div className="system-menu" role="menu">
+              <span className="menu-label">移动到</span>{[{ id: UNGROUPED, name: "未分组" }, ...groups].filter((group) => group.id !== item.groupId).map((group) => <button key={group.id || "ungrouped"} onClick={() => { setStore((current) => moveLink(current, item.id, group.id) || current); setSystemMenuId(null); }}>{group.name}</button>)}<i />
               <button onClick={() => { setSystemMenuId(null); setEditingSystemId(item.id); }}>编辑名称和网址</button>
               <button className="danger" onClick={() => { setSystemMenuId(null); if (window.confirm(`确定删除“${item.name}”吗？`)) setStore((current) => ({ ...current, systems: current.systems.filter((system) => system.id !== item.id) })); }}>删除</button>
             </div>}
@@ -130,8 +134,9 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
       <h2>管理链接分组</h2>
       <div className="section-add"><input autoFocus value={draftGroup} maxLength={40} onChange={(event) => setDraftGroup(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addGroup()} placeholder="新分组名称" /><button onClick={addGroup}>新增分组</button></div>
       <div className="section-manage-row"><span>未分组</span><span>{store.systems.filter((item) => item.groupId === UNGROUPED).length} 项</span></div>
-      {groups.map((group, index) => <div className="section-manage-row" key={group.id}><input value={group.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = group.name; }} onChange={(event) => setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((item) => item.id === group.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitGroupName(group.id, event.currentTarget.value, event.currentTarget.dataset.original || group.name)} /><span>{store.systems.filter((item) => item.groupId === group.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && setStore((current) => reorderLinkGroups(current, group.id, groups[index - 1].id) || current)} disabled={index === 0} aria-label={`上移${group.name}`}>↑</button><button onClick={() => index < groups.length - 1 && setStore((current) => reorderLinkGroups(current, group.id, groups[index + 1].id, "after") || current)} disabled={index === groups.length - 1} aria-label={`下移${group.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => removeGroup(group)} aria-label={`删除${group.name}`}>×</button></div>)}
+      {groups.map((group, index) => <div className="section-manage-row" key={group.id}><input value={group.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = group.name; }} onChange={(event) => setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((item) => item.id === group.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitGroupName(group.id, event.currentTarget.value, event.currentTarget.dataset.original || group.name)} /><span>{store.systems.filter((item) => item.groupId === group.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && setStore((current) => reorderLinkGroups(current, group.id, groups[index - 1].id) || current)} disabled={index === 0} aria-label={`上移${group.name}`}>↑</button><button onClick={() => index < groups.length - 1 && setStore((current) => reorderLinkGroups(current, group.id, groups[index + 1].id, "after") || current)} disabled={index === groups.length - 1} aria-label={`下移${group.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => requestRemoveGroup(group)} aria-label={`删除${group.name}`}>×</button></div>)}
     </section></div>}
+    {deleteGroupId && <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="迁移并删除链接分组"><button className="info-dialog-close" onClick={() => setDeleteGroupId(null)} aria-label="关闭">×</button><h2>迁移并删除分组</h2><div className="category-delete-dialog"><p>先选择链接要迁移到的分组，再删除“{groups.find((item) => item.id === deleteGroupId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}><option value={UNGROUPED}>未分组</option>{groups.filter((item) => item.id !== deleteGroupId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteGroupId(null)}>取消</button><button className="danger" onClick={confirmRemoveGroup}>迁移并删除</button></footer></div></section></div>}
     {storageError && <p className="storage-warn">本地存储异常，改动可能无法保存</p>}
   </div>;
 }
@@ -143,16 +148,17 @@ function HighlightText({ text, query }: { text: string; query: string }) {
 }
 
 function SystemDialog({ onSave, onClose }: { onSave: (name: string, url: string, meta: Awaited<ReturnType<typeof fetchSiteMetadata>>) => Promise<void>; onClose: () => void }) {
-  const [url, setUrl] = useState(""); const [name, setName] = useState(""); const [nameEdited, setNameEdited] = useState(false); const [loading, setLoading] = useState(false); const [meta, setMeta] = useState<Awaited<ReturnType<typeof fetchSiteMetadata>>>(null);
+  const [url, setUrl] = useState(""); const [name, setName] = useState(""); const [loading, setLoading] = useState(false); const [meta, setMeta] = useState<Awaited<ReturnType<typeof fetchSiteMetadata>>>(null);
+  const nameEditedRef = useRef(false);
   const recognition = useRef<Promise<Awaited<ReturnType<typeof fetchSiteMetadata>>> | null>(null);
-  async function recognize() { const normalized = safeUrl(url); if (!normalized) return null; if (recognition.current) return recognition.current; setLoading(true); recognition.current = fetchSiteMetadata(normalized); try { const next = await recognition.current; setMeta(next); if (!nameEdited) setName(next?.title || urlMeta(normalized)?.name || ""); return next; } finally { recognition.current = null; setLoading(false); } }
+  async function recognize() { const normalized = safeUrl(url); if (!normalized) return null; if (recognition.current) return recognition.current; setLoading(true); recognition.current = fetchSiteMetadata(normalized); try { const next = await recognition.current; setMeta(next); if (!nameEditedRef.current) setName(next?.title || urlMeta(normalized)?.name || ""); return next; } finally { recognition.current = null; setLoading(false); } }
   async function submit() { if (!safeUrl(url)) return; const next = meta || await recognize(); const finalName = (name || next?.title || urlMeta(url)?.name || "").trim(); if (!finalName) return; await onSave(finalName, url, next); }
   return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="新增常用链接">
     <button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button>
     <h2>新增常用链接</h2>
     <div className="dialog-fields">
       <label className="dialog-field"><span>网址</span><input autoFocus value={url} onChange={(event) => { setUrl(event.target.value); setMeta(null); }} onBlur={() => void recognize()} placeholder="https://example.com" /></label>
-      <label className="dialog-field"><span>名称</span><input value={name} maxLength={200} onChange={(event) => { setName(event.target.value); setNameEdited(true); }} placeholder={loading ? "正在识别网站名称…" : "自动填充，可修改"} /></label>
+      <label className="dialog-field"><span>名称</span><input value={name} maxLength={200} onChange={(event) => { setName(event.target.value); nameEditedRef.current = true; }} placeholder={loading ? "正在识别网站名称…" : "自动填充，可修改"} /></label>
     </div>
     <footer><button onClick={onClose}>取消</button><button className="primary" disabled={!safeUrl(url)} onClick={() => void submit()}>{loading ? "识别中…" : "添加"}</button></footer>
   </section></div>;

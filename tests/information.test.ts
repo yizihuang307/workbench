@@ -299,6 +299,9 @@ test("link groups reorder and group deletion preserves links", () => {
   const deleted = deleteLinkGroup(reordered!, "g2");
   assert.equal(deleted?.linkGroups.some((item) => item.id === "g2"), false);
   assert.equal(deleted?.systems[0].groupId, UNGROUPED);
+  const migrated = deleteLinkGroup(reordered!, "g2", "g1");
+  assert.equal(migrated?.systems[0].groupId, "g1");
+  assert.equal(deleteLinkGroup(reordered!, "g2", "missing"), null);
 });
 
 test("links reorder within and move across groups with normalized orders", () => {
