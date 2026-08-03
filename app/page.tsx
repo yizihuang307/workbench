@@ -7,6 +7,7 @@ import LinkLibraryView from "./link-library-view";
 import ResourceBoardView from "./resource-board-view";
 import { emptyInfoStore, type InfoStore } from "./information";
 import { INFO_SYNC_KEY, loadInfoStore, migrateLegacyInfoStore, saveInfoStore } from "./information-storage";
+import { addCompletion, cleanCompletionHistory, completionsForDay, completionsForWeek, dayStart, removeCompletion, weekStart, type CompletionRecord } from "./completion-history";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -25,6 +26,7 @@ type Store = {
   hideDone: boolean;
   mood: number;
   quickNotes: { id: string; text: string; createdAt: number }[];
+  completionHistory: CompletionRecord[];
 };
 type Deleted = { task: Task; group: Group; index: number };
 
@@ -56,7 +58,7 @@ function localDate() {
 }
 
 function emptyStore(): Store {
-  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [] };
+  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [], completionHistory: [] };
 }
 
 function cleanTask(value: unknown): Task | null {
@@ -92,6 +94,7 @@ function parseStore(raw: string): Store | null {
       hideDone: Boolean(value.hideDone),
       mood: Number.isInteger(value.mood) ? Math.max(0, Math.min(4, Number(value.mood))) : 2,
       quickNotes: Array.isArray(value.quickNotes) ? value.quickNotes.filter((note) => note && typeof note.text === "string").map((note) => ({ id: typeof note.id === "string" ? note.id : id(), text: note.text.slice(0, 2000), createdAt: typeof note.createdAt === "number" ? note.createdAt : Date.now() })).slice(-100) : [],
+      completionHistory: cleanCompletionHistory(value.completionHistory),
     };
   } catch {
     return null;
@@ -109,6 +112,7 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Group | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [deleted, setDeleted] = useState<Deleted | null>(null);
   const [dragged, setDragged] = useState<{ group: Group; id: string } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,9 +214,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen));
+    document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen || historyOpen));
     return () => document.body.classList.remove("modal-open");
-  }, [expanded, quickOpen]);
+  }, [expanded, quickOpen, historyOpen]);
 
   useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
 
@@ -235,8 +239,19 @@ export default function Home() {
   }
 
   function toggleTask(group: Group, taskId: string) {
-    updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId
-      ? { ...task, done: !task.done, legacy: !task.done ? false : task.legacy } : task) }));
+    setStore((current) => {
+      const task = current.tasks[group].find((item) => item.id === taskId);
+      if (!task) return current;
+      const completing = !task.done;
+      return {
+        ...current,
+        savedDate: localDate(),
+        tasks: { ...current.tasks, [group]: current.tasks[group].map((item) => item.id === taskId ? { ...item, done: completing, legacy: completing ? false : item.legacy } : item) },
+        completionHistory: completing
+          ? addCompletion(current.completionHistory, { taskId, label: task.label, source: group, completedAt: Date.now() })
+          : removeCompletion(current.completionHistory, taskId),
+      };
+    });
   }
 
   function togglePriority(taskId: string) {
@@ -246,7 +261,7 @@ export default function Home() {
   function editTask(group: Group, taskId: string, label: string) {
     const clean = label.trim().slice(0, 200);
     if (!clean) return false;
-    updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId ? { ...task, label: clean } : task) }));
+    setStore((current) => ({ ...current, savedDate: localDate(), tasks: { ...current.tasks, [group]: current.tasks[group].map((task) => task.id === taskId ? { ...task, label: clean } : task) }, completionHistory: current.completionHistory.map((item) => item.taskId === taskId ? { ...item, label: clean } : item) }));
     return true;
   }
 
@@ -322,6 +337,7 @@ export default function Home() {
           <div className="hero-intro"><p>{dateLabel}</p><h1>今天，先完成真正重要的事。</h1></div>
           <div className="hero-tools">
             {/* 心情模块暂时隐藏：保留 Mood 组件与本地数据，便于后续恢复。 */}
+            <button className="history-button" onClick={() => setHistoryOpen(true)}><span aria-hidden>✓</span>完成记录</button>
             <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
           </div>
         </header>
@@ -339,6 +355,7 @@ export default function Home() {
     {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
       <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />
     </Modal>}
+    {historyOpen && <Modal title="完成记录" onClose={() => setHistoryOpen(false)}><CompletionHistory history={store.completionHistory} /></Modal>}
     {quickOpen && <QuickNote categories={recordStore.categories} defaultCategoryId={recordStore.defaultCategoryId} onDefaultChange={(defaultCategoryId) => setRecordStore((current) => ({ ...current, defaultCategoryId }))} onClose={() => setQuickOpen(false)} onSave={(text, categoryId) => {
       setStore((current) => ({ ...current, quickNotes: [...current.quickNotes, { id: id(), text, createdAt: Date.now() }].slice(-100) }));
       const now = Date.now();
@@ -348,6 +365,43 @@ export default function Home() {
     {notice && <div className="toast" role="status"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="关闭提示">×</button></div>}
     {deleted && <div className="undo" role="status"><span>已删除“{deleted.task.label}”</span><button onClick={undoDelete}>撤销</button></div>}
   </main>;
+}
+
+const SOURCE_NAME: Record<Group, string> = { today: "来自今日", week: "来自本周", later: "来自后续" };
+
+function CompletionHistory({ history }: { history: CompletionRecord[] }) {
+  const [mode, setMode] = useState<"day" | "week">("day");
+  const [anchor, setAnchor] = useState(() => Date.now());
+  const items = mode === "day" ? completionsForDay(history, anchor) : completionsForWeek(history, anchor);
+  const start = mode === "day" ? dayStart(anchor) : weekStart(anchor);
+  const startDate = new Date(start);
+  const end = mode === "day" ? start : new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6).getTime();
+  const formatDate = (timestamp: number) => `${new Date(timestamp).getMonth() + 1}月${new Date(timestamp).getDate()}日`;
+  const label = mode === "day" ? formatDate(start) : `${formatDate(start)} — ${formatDate(end)}`;
+  const grouped = items.reduce<Record<string, CompletionRecord[]>>((result, item) => {
+    const key = String(dayStart(item.completedAt));
+    (result[key] ||= []).push(item);
+    return result;
+  }, {});
+  function move(days: number) {
+    const next = new Date(anchor);
+    next.setDate(next.getDate() + days);
+    setAnchor(next.getTime());
+  }
+  return <section className="completion-history">
+    <header><div><h2>完成记录</h2><p>只记录真正完成的事项，恢复未完成后会自动移除。</p></div>
+      <div className="history-tabs" role="tablist" aria-label="完成记录范围">
+        <button role="tab" aria-selected={mode === "day"} className={mode === "day" ? "active" : ""} onClick={() => setMode("day")}>按日查看</button>
+        <button role="tab" aria-selected={mode === "week"} className={mode === "week" ? "active" : ""} onClick={() => setMode("week")}>按周查看</button>
+      </div>
+    </header>
+    <div className="history-range"><button onClick={() => move(mode === "day" ? -1 : -7)} aria-label="上一时段">←</button><strong>{label}</strong><button onClick={() => move(mode === "day" ? 1 : 7)} aria-label="下一时段">→</button><button className="history-today" onClick={() => setAnchor(Date.now())}>回到今天</button></div>
+    <p className="history-summary">共完成 <strong>{items.length}</strong> 项</p>
+    {items.length ? <div className="history-list">{Object.entries(grouped).map(([date, records]) => <section key={date}>
+      {mode === "week" && <h3>{formatDate(Number(date))}</h3>}
+      {records.map((item) => <article key={item.taskId}><span aria-hidden>✓</span><div><strong>{item.label}</strong><small>{SOURCE_NAME[item.source]} · {new Date(item.completedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</small></div></article>)}
+    </section>)}</div> : <div className="history-empty"><b>✓</b><strong>这个时段还没有完成事项</strong><span>完成事项后会自动出现在这里</span></div>}
+  </section>;
 }
 
 type AreaActions = {

@@ -58,6 +58,21 @@ test("navigation and information page slogans use the confirmed names", async ()
   assert.doesNotMatch(resources, /<h1>资料库<\/h1>/);
 });
 
+test("schedule exposes completion history with daily and weekly views", async () => {
+  const [page, model, css] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/completion-history.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+  ]);
+  assert.match(page, />完成记录<\/button>/);
+  assert.match(page, />按日查看<\/button>/);
+  assert.match(page, />按周查看<\/button>/);
+  assert.match(page, /addCompletion\(current\.completionHistory/);
+  assert.match(page, /removeCompletion\(current\.completionHistory/);
+  assert.match(model, /const MAX_HISTORY = 5000/);
+  assert.match(css, /\.completion-history/);
+});
+
 test("AI organizer fails safely when the server key is absent", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("organize", `${process.pid}-${Date.now()}`);
