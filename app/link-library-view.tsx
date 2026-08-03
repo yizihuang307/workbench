@@ -19,6 +19,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   const [dropGroupId, setDropGroupId] = useState<string | null>(null);
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState(UNGROUPED);
+  const columnsRef = useRef<HTMLDivElement | null>(null);
 
   const groups = useMemo(() => [...store.linkGroups].sort((a, b) => a.order - b.order), [store.linkGroups]);
   const editingSystem = store.systems.find((item) => item.id === editingSystemId) ?? null;
@@ -87,7 +88,8 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
     </header>
     <div className="info-search search-only"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索链接名称或网址" aria-label="搜索链接" /></div>
 
-    <div className="link-columns">
+    <div className="board-scroll-controls" aria-label="浏览链接分组"><button type="button" onClick={() => columnsRef.current?.scrollBy({ left: -320, behavior: "smooth" })} aria-label="向左查看分组">‹</button><button type="button" onClick={() => columnsRef.current?.scrollBy({ left: 320, behavior: "smooth" })} aria-label="向右查看分组">›</button></div>
+    <div className="link-columns" ref={columnsRef}>
       {[{ id: UNGROUPED, name: store.ungroupedName, order: -1, createdAt: 0 }, ...groups].map((group) => {
         const items = visibleLinks(store, group.id, query, "manual");
         return <section key={group.id || "ungrouped"} className={`link-column board-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""} ${systemMenu && items.some((item) => item.id === systemMenu.id) ? " menu-open" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId && group.id) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(group.id); setDraggedGroupId(null); setDropGroupId(null); }}>

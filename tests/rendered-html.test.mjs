@@ -325,6 +325,8 @@ test("links and resources use compact manual boards without redundant tabs or so
   assert.doesNotMatch(links, />排序：|aria-label="网格视图"|aria-label="列表视图"|aria-label="分组索引"/);
   assert.doesNotMatch(resources, />排序：|aria-label="分区索引"/);
   assert.match(links, /className="link-columns"/);
+  assert.match(links, /aria-label="浏览链接分组"/);
+  assert.match(links, /columnsRef\.current\?\.scrollBy/);
   assert.match(links, /className=\{`link-column board-column/);
   assert.match(links, /EditableGroupRow/);
   assert.match(links, /draggedId === item\.id \? " dragging"/);
