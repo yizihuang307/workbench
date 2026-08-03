@@ -337,13 +337,12 @@ export default function Home() {
           <div className="hero-intro"><p>{dateLabel}</p><h1>今天，先完成真正重要的事。</h1></div>
           <div className="hero-tools">
             {/* 心情模块暂时隐藏：保留 Mood 组件与本地数据，便于后续恢复。 */}
-            <button className="history-button" onClick={() => setHistoryOpen(true)}><span aria-hidden>✓</span>完成记录</button>
             <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
           </div>
         </header>
 
         <div className="board">
-          <TaskArea group="today" tasks={store.tasks.today} {...actions} onExpand={() => setExpanded("today")} expandRef={(node) => { expandButtons.current.today = node; }} featured />
+          <TaskArea group="today" tasks={store.tasks.today} {...actions} onExpand={() => setExpanded("today")} onOpenHistory={() => setHistoryOpen(true)} expandRef={(node) => { expandButtons.current.today = node; }} featured />
           <div className="side-areas">
             <TaskArea group="week" tasks={store.tasks.week} {...actions} onExpand={() => setExpanded("week")} expandRef={(node) => { expandButtons.current.week = node; }} />
             <TaskArea group="later" tasks={store.tasks.later} {...actions} onExpand={() => setExpanded("later")} expandRef={(node) => { expandButtons.current.later = node; }} />
@@ -388,6 +387,12 @@ function CompletionHistory({ history }: { history: CompletionRecord[] }) {
     next.setDate(next.getDate() + days);
     setAnchor(next.getTime());
   }
+  const anchorDate = new Date(anchor);
+  const dateValue = `${anchorDate.getFullYear()}-${String(anchorDate.getMonth() + 1).padStart(2, "0")}-${String(anchorDate.getDate()).padStart(2, "0")}`;
+  function chooseDate(value: string) {
+    const [year, month, day] = value.split("-").map(Number);
+    if (year && month && day) setAnchor(new Date(year, month - 1, day, 12).getTime());
+  }
   return <section className="completion-history">
     <header><div><h2>完成记录</h2><p>只记录真正完成的事项，恢复未完成后会自动移除。</p></div>
       <div className="history-tabs" role="tablist" aria-label="完成记录范围">
@@ -395,7 +400,7 @@ function CompletionHistory({ history }: { history: CompletionRecord[] }) {
         <button role="tab" aria-selected={mode === "week"} className={mode === "week" ? "active" : ""} onClick={() => setMode("week")}>按周查看</button>
       </div>
     </header>
-    <div className="history-range"><button onClick={() => move(mode === "day" ? -1 : -7)} aria-label="上一时段">←</button><strong>{label}</strong><button onClick={() => move(mode === "day" ? 1 : 7)} aria-label="下一时段">→</button><button className="history-today" onClick={() => setAnchor(Date.now())}>回到今天</button></div>
+    <div className="history-range"><button onClick={() => move(mode === "day" ? -1 : -7)} aria-label="上一时段">←</button><div className="history-date-control"><label><span>{label}</span><input type="date" value={dateValue} onChange={(event) => chooseDate(event.target.value)} aria-label="选择完成记录日期" /></label><button className="history-today" onClick={() => setAnchor(Date.now())}>回到今天</button></div><button onClick={() => move(mode === "day" ? 1 : 7)} aria-label="下一时段">→</button></div>
     <p className="history-summary">共完成 <strong>{items.length}</strong> 项</p>
     {items.length ? <div className="history-list">{Object.entries(grouped).map(([date, records]) => <section key={date}>
       {mode === "week" && <h3>{formatDate(Number(date))}</h3>}
@@ -417,15 +422,15 @@ type AreaActions = {
   setHideDone: (value: boolean) => void;
 };
 
-function TaskArea({ group, tasks, onExpand, expandRef, featured = false, expanded = false, ...actions }: AreaActions & {
-  group: Group; tasks: Task[]; onExpand: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
+function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured = false, expanded = false, ...actions }: AreaActions & {
+  group: Group; tasks: Task[]; onExpand: () => void; onOpenHistory?: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
 }) {
   const shown = useMemo(() => actions.hideDone ? tasks.filter((task) => !task.done) : tasks, [actions.hideDone, tasks]);
   const complete = tasks.filter((task) => task.done).length;
   return <section className={`task-area area-${group} ${featured ? "featured" : ""} ${expanded ? "expanded" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
     <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {tasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
-      {!expanded && <button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button>}
+      {!expanded && <div className="area-header-actions">{group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}<button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button></div>}
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
     <div className="task-list" aria-label={GROUP_NAME[group]}>

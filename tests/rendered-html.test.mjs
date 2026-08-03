@@ -65,6 +65,9 @@ test("schedule exposes completion history with daily and weekly views", async ()
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(page, />完成记录<\/button>/);
+  assert.match(page, /className="area-header-actions"/);
+  assert.match(page, /type="date"/);
+  assert.match(page, /aria-label="选择完成记录日期"/);
   assert.match(page, />按日查看<\/button>/);
   assert.match(page, />按周查看<\/button>/);
   assert.match(page, /addCompletion\(current\.completionHistory/);
