@@ -124,7 +124,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
 
   return <div className="resource-board">
     <header className="info-toolbar compact-toolbar">
-      <div className="info-page-heading"><h1>资料库</h1><p>知识常积攒，好运常相伴</p></div>
+      <div className="info-page-heading"><p><span aria-hidden>📚</span> 知识常积攒，好运常相伴</p></div>
       <button className="info-manage" onClick={() => setManageOpen(true)}>管理分区</button>
     </header>
     <div className="info-search search-only">

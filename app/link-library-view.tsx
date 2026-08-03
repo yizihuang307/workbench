@@ -82,7 +82,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
 
   return <div className="link-library">
     <header className="info-toolbar compact-toolbar">
-      <div className="info-page-heading"><h1>传送门</h1><p>链接存到位，效率翻一倍</p></div>
+      <div className="info-page-heading"><p><span aria-hidden>🚀</span> 链接存到位，效率翻一倍</p></div>
       <button className="info-manage" onClick={() => setGroupManageOpen(true)}>管理分组</button>
     </header>
     <div className="info-search search-only"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索链接名称或网址" aria-label="搜索链接" /></div>

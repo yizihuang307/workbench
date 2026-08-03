@@ -52,8 +52,10 @@ test("navigation and information page slogans use the confirmed names", async ()
   assert.match(page, />随手记<\/button>/);
   assert.match(page, />传送门<\/button>/);
   assert.match(page, />资料库<\/button>/);
-  assert.match(links, /链接存到位，效率翻一倍/);
-  assert.match(resources, /知识常积攒，好运常相伴/);
+  assert.match(links, /<span aria-hidden>🚀<\/span> 链接存到位，效率翻一倍/);
+  assert.match(resources, /<span aria-hidden>📚<\/span> 知识常积攒，好运常相伴/);
+  assert.doesNotMatch(links, /<h1>传送门<\/h1>/);
+  assert.doesNotMatch(resources, /<h1>资料库<\/h1>/);
 });
 
 test("AI organizer fails safely when the server key is absent", async () => {
