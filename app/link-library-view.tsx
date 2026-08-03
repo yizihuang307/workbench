@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ALL_GROUP, deleteLinkGroup, infoId, moveLink, reorderLinkGroups, safeUrl, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, type InfoStore, type LinkGroup, type SystemItem } from "./information";
+import InformationItemMenu from "./information-item-menu";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -9,7 +10,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   const [query, setQuery] = useState("");
   const [activeGroup, setActiveGroup] = useState<string>(UNGROUPED);
   const [newSystem, setNewSystem] = useState(false);
-  const [systemMenuId, setSystemMenuId] = useState<string | null>(null);
+  const [systemMenu, setSystemMenu] = useState<{ id: string; top: number; left: number } | null>(null);
   const [editingSystemId, setEditingSystemId] = useState<string | null>(null);
   const [groupManageOpen, setGroupManageOpen] = useState(false);
   const [draftGroup, setDraftGroup] = useState("");
@@ -24,8 +25,8 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
 
   // 关闭操作菜单
   useEffect(() => {
-    function outside(event: PointerEvent) { if (!(event.target instanceof Element) || !event.target.closest(".system-row")) setSystemMenuId(null); }
-    function key(event: KeyboardEvent) { if (event.key === "Escape") { setSystemMenuId(null); setNewSystem(false); setEditingSystemId(null); setGroupManageOpen(false); } }
+    function outside(event: PointerEvent) { if (!(event.target instanceof Element) || !event.target.closest(".system-row, .information-item-menu, .information-move-menu")) setSystemMenu(null); }
+    function key(event: KeyboardEvent) { if (event.key === "Escape") { setSystemMenu(null); setNewSystem(false); setEditingSystemId(null); setGroupManageOpen(false); } }
     document.addEventListener("pointerdown", outside); document.addEventListener("keydown", key);
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", key); };
   });
@@ -87,9 +88,9 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
     <div className="info-search search-only"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索链接名称或网址" aria-label="搜索链接" /></div>
 
     <div className="link-columns">
-      {[{ id: UNGROUPED, name: "未分组", order: -1, createdAt: 0 }, ...groups].map((group) => {
+      {[{ id: UNGROUPED, name: store.ungroupedName, order: -1, createdAt: 0 }, ...groups].map((group) => {
         const items = visibleLinks(store, group.id, query, "manual");
-        return <section key={group.id || "ungrouped"} className={`link-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""} ${systemMenuId && items.some((item) => item.id === systemMenuId) ? " menu-open" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId && group.id) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(group.id); setDraggedGroupId(null); setDropGroupId(null); }}>
+        return <section key={group.id || "ungrouped"} className={`link-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""} ${systemMenu && items.some((item) => item.id === systemMenu.id) ? " menu-open" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId && group.id) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(group.id); setDraggedGroupId(null); setDropGroupId(null); }}>
           <header className="link-column-header" draggable={Boolean(group.id)} onDragStart={(event) => { event.stopPropagation(); setDraggedId(null); setDraggedGroupId(group.id); }} onDragEnd={() => { setDraggedGroupId(null); setDropGroupId(null); }}><div><span className="drag-grip" aria-hidden>⠿</span><h2>{group.name}</h2><small>{items.length}</small></div><button onClick={() => { setActiveGroup(group.id); setNewSystem(true); }} aria-label={`在${group.name}新增链接`}>＋</button></header>
           <div className="link-column-body">
         {items.map((item) => {
@@ -101,12 +102,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
               <span><HighlightText text={item.name} query={query} /></span>
               <small><HighlightText text={new URL(target.url).hostname} query={query} /></small>
             </button>
-            <button className="system-remove" aria-label={`操作${item.name}`} aria-expanded={systemMenuId === item.id} onClick={() => setSystemMenuId((current) => current === item.id ? null : item.id)}>···</button>
-            {systemMenuId === item.id && <div className="system-menu" role="menu">
-              <span className="menu-label">移动到</span>{[{ id: UNGROUPED, name: "未分组" }, ...groups].filter((group) => group.id !== item.groupId).map((group) => <button key={group.id || "ungrouped"} onClick={() => { setStore((current) => moveLink(current, item.id, group.id) || current); setSystemMenuId(null); }}>{group.name}</button>)}<i />
-              <button onClick={() => { setSystemMenuId(null); setEditingSystemId(item.id); }}>编辑名称和网址</button>
-              <button className="danger" onClick={() => { setSystemMenuId(null); if (window.confirm(`确定删除“${item.name}”吗？`)) setStore((current) => ({ ...current, systems: current.systems.filter((system) => system.id !== item.id) })); }}>删除</button>
-            </div>}
+            <button className="system-remove" aria-label={`操作${item.name}`} aria-expanded={systemMenu?.id === item.id} onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setSystemMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 112) }); }}>···</button>
           </article>;
         })}
         {!items.length && <div className="info-empty compact"><span>{query ? "没有匹配的链接" : "拖动链接到这里，或点上方＋添加"}</span></div>}
@@ -114,6 +110,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
         </section>;
       })}
     </div>
+    {systemMenu && (() => { const item = store.systems.find((value) => value.id === systemMenu.id); if (!item) return null; return <InformationItemMenu top={systemMenu.top} left={systemMenu.left} targets={[{ id: UNGROUPED, name: store.ungroupedName }, ...groups].filter((group) => group.id !== item.groupId)} onMove={(groupId) => { setStore((current) => moveLink(current, item.id, groupId) || current); setSystemMenu(null); }} onEdit={() => { setSystemMenu(null); setEditingSystemId(item.id); }} deleteLabel="删除链接" onDelete={() => { setSystemMenu(null); if (window.confirm(`确定删除“${item.name}”吗？`)) setStore((current) => ({ ...current, systems: current.systems.filter((system) => system.id !== item.id) })); }} />; })()}
 
     {newSystem && <SystemDialog onClose={() => setNewSystem(false)} onSave={async (name, input, remote) => {
       const meta = urlMeta(input); if (!meta) { onNotice("请输入有效的 http/https 网址"); return; }
@@ -133,7 +130,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
       <button className="info-dialog-close" onClick={() => setGroupManageOpen(false)} aria-label="关闭">×</button>
       <h2>管理链接分组</h2>
       <div className="section-add"><input autoFocus value={draftGroup} maxLength={40} onChange={(event) => setDraftGroup(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addGroup()} placeholder="新分组名称" /><button onClick={addGroup}>新增分组</button></div>
-      <div className="section-manage-row"><span>未分组</span><span>{store.systems.filter((item) => item.groupId === UNGROUPED).length} 项</span></div>
+      <div className="section-manage-row"><input value={store.ungroupedName} maxLength={40} onChange={(event) => setStore((current) => ({ ...current, ungroupedName: event.target.value }))} onBlur={(event) => setStore((current) => ({ ...current, ungroupedName: event.currentTarget.value.trim().slice(0, 40) || "未分组" }))} /><span>{store.systems.filter((item) => item.groupId === UNGROUPED).length} 项</span><span className="protected-category">默认</span></div>
       {groups.map((group, index) => <div className="section-manage-row" key={group.id}><input value={group.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = group.name; }} onChange={(event) => setStore((current) => ({ ...current, linkGroups: current.linkGroups.map((item) => item.id === group.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitGroupName(group.id, event.currentTarget.value, event.currentTarget.dataset.original || group.name)} /><span>{store.systems.filter((item) => item.groupId === group.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && setStore((current) => reorderLinkGroups(current, group.id, groups[index - 1].id) || current)} disabled={index === 0} aria-label={`上移${group.name}`}>↑</button><button onClick={() => index < groups.length - 1 && setStore((current) => reorderLinkGroups(current, group.id, groups[index + 1].id, "after") || current)} disabled={index === groups.length - 1} aria-label={`下移${group.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => requestRemoveGroup(group)} aria-label={`删除${group.name}`}>×</button></div>)}
     </section></div>}
     {deleteGroupId && <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="迁移并删除链接分组"><button className="info-dialog-close" onClick={() => setDeleteGroupId(null)} aria-label="关闭">×</button><h2>迁移并删除分组</h2><div className="category-delete-dialog"><p>先选择链接要迁移到的分组，再删除“{groups.find((item) => item.id === deleteGroupId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}><option value={UNGROUPED}>未分组</option>{groups.filter((item) => item.id !== deleteGroupId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteGroupId(null)}>取消</button><button className="danger" onClick={confirmRemoveGroup}>迁移并删除</button></footer></div></section></div>}
@@ -153,14 +150,14 @@ function SystemDialog({ onSave, onClose }: { onSave: (name: string, url: string,
   const recognition = useRef<Promise<Awaited<ReturnType<typeof fetchSiteMetadata>>> | null>(null);
   async function recognize() { const normalized = safeUrl(url); if (!normalized) return null; if (recognition.current) return recognition.current; setLoading(true); recognition.current = fetchSiteMetadata(normalized); try { const next = await recognition.current; setMeta(next); if (!nameEditedRef.current) setName(next?.title || urlMeta(normalized)?.name || ""); return next; } finally { recognition.current = null; setLoading(false); } }
   async function submit() { if (!safeUrl(url)) return; const next = meta || await recognize(); const finalName = (name || next?.title || urlMeta(url)?.name || "").trim(); if (!finalName) return; await onSave(finalName, url, next); }
-  return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="新增常用链接">
+  return <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="新增链接">
     <button className="info-dialog-close" onClick={onClose} aria-label="关闭">×</button>
-    <h2>新增常用链接</h2>
+    <h2>新增链接</h2>
     <div className="dialog-fields">
       <label className="dialog-field"><span>网址</span><input autoFocus value={url} onChange={(event) => { setUrl(event.target.value); setMeta(null); }} onBlur={() => void recognize()} placeholder="https://example.com" /></label>
       <label className="dialog-field"><span>名称</span><input value={name} maxLength={200} onChange={(event) => { setName(event.target.value); nameEditedRef.current = true; }} placeholder={loading ? "正在识别网站名称…" : "自动填充，可修改"} /></label>
     </div>
-    <footer><button onClick={onClose}>取消</button><button className="primary" disabled={!safeUrl(url)} onClick={() => void submit()}>{loading ? "识别中…" : "添加"}</button></footer>
+    <footer><button onClick={onClose}>取消</button><button className="primary" disabled={!safeUrl(url)} onClick={() => void submit()}>添加</button></footer>
   </section></div>;
 }
 
@@ -179,5 +176,6 @@ function SystemEditDialog({ item, onSave, onClose }: { item: SystemItem; onSave:
 }
 
 async function fetchSiteMetadata(url: string) {
-  try { const response = await fetch("/api/site-metadata", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) }); if (!response.ok) return null; return await response.json() as { title: string; icon: string; finalUrl: string }; } catch { return null; }
+  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 1800);
+  try { const response = await fetch("/api/site-metadata", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }), signal: controller.signal }); if (!response.ok) return null; return await response.json() as { title: string; icon: string; finalUrl: string }; } catch { return null; } finally { clearTimeout(timer); }
 }

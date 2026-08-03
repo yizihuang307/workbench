@@ -10,7 +10,7 @@ export type FileBlock = { id: string; type: "file"; name: string; mime: string; 
 export type InfoBlock = TextBlock | LinkBlock | FileBlock;
 // v2：资源增加 order 字段支持看板内手动排序；保留 documentHtml 以兼容统一文档编辑器。
 export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; documentHtml?: string; blocks: InfoBlock[]; pinned: boolean; order: number; createdAt: number; updatedAt: number };
-export type InfoStore = { version: 2; linkGroups: LinkGroup[]; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
+export type InfoStore = { version: 2; ungroupedName: string; linkGroups: LinkGroup[]; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
 
 // 链接分组：空字符串代表“未分组”。
 export const UNGROUPED = "";
@@ -26,7 +26,7 @@ export const TOTAL_FILE_LIMIT = 200 * 1024 * 1024;
 export function infoId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`; }
 
 export function emptyInfoStore(now = Date.now()): InfoStore {
-  return { version: 2, linkGroups: [], sections: [
+  return { version: 2, ungroupedName: "未分组", linkGroups: [], sections: [
     { id: "work", name: "工作资料", type: "resources", order: 0, createdAt: now },
     { id: "learning", name: "学习收藏", type: "resources", order: 1, createdAt: now + 1 },
   ], systems: [], resources: [] };
@@ -336,7 +336,8 @@ export function parseInfoStore(raw: string): InfoStore | null {
     const normalizedGroups = linkGroups.map((group, order) => ({ ...group, order }));
     const normalizedResources = normalizedSections.flatMap((section) => resources.filter((item) => item.sectionId === section.id).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((item, order) => ({ ...item, order })));
     const normalizedSystems = [UNGROUPED, ...normalizedGroups.map((group) => group.id)].flatMap((groupId) => systems.filter((item) => item.groupId === groupId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((item, order) => ({ ...item, order })));
-    const store: InfoStore = { version: 2, linkGroups: normalizedGroups, sections: normalizedSections, systems: normalizedSystems, resources: normalizedResources };
+    const ungroupedName = isV2 && typeof (value as { ungroupedName?: unknown }).ungroupedName === "string" && (value as { ungroupedName: string }).ungroupedName.trim() ? (value as { ungroupedName: string }).ungroupedName.trim().slice(0, 40) : "未分组";
+    const store: InfoStore = { version: 2, ungroupedName, linkGroups: normalizedGroups, sections: normalizedSections, systems: normalizedSystems, resources: normalizedResources };
     if (totalFileBytes(store) > TOTAL_FILE_LIMIT) store.resources = store.resources.map((item) => ({ ...item, blocks: item.blocks.filter((block) => block.type !== "file") }));
     return store;
   } catch { return null; }

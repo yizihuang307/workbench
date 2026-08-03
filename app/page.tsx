@@ -112,6 +112,7 @@ export default function Home() {
   const [deleted, setDeleted] = useState<Deleted | null>(null);
   const [dragged, setDragged] = useState<{ group: Group; id: string } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressInfoSave = useRef(false);
   const expandButtons = useRef<Partial<Record<Group, HTMLButtonElement | null>>>({});
 
@@ -195,7 +196,6 @@ export default function Home() {
   useEffect(() => {
     function syncInfo(event: StorageEvent) {
       if (event.key !== INFO_SYNC_KEY || !event.newValue) return;
-      if ((activePage === "links" || activePage === "resources") && document.hasFocus()) { setNotice("另一标签页修改了信息，请刷新确认，避免覆盖当前编辑"); return; }
       void loadInfoStore().then((parsed) => { if (parsed) { suppressInfoSave.current = true; setInfoStore(parsed); setNotice("已同步另一标签页的信息修改"); } });
     }
     window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
@@ -207,6 +207,13 @@ export default function Home() {
   }, [expanded, quickOpen]);
 
   useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(""), 3200);
+    return () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); };
+  }, [notice]);
 
   function updateTasks(updater: (tasks: Tasks) => Tasks) {
     setStore((current) => ({ ...current, tasks: updater(current.tasks), savedDate: localDate() }));

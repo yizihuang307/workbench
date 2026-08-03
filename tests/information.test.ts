@@ -318,6 +318,13 @@ test("links reorder within and move across groups with normalized orders", () =>
   assert.equal(moveLink(store, "a", "missing"), null);
 });
 
+test("the protected ungrouped name persists and damaged values recover", () => {
+  const store = emptyInfoStore(1);
+  store.ungroupedName = "待整理";
+  assert.equal(parseInfoStore(JSON.stringify(store))?.ungroupedName, "待整理");
+  assert.equal(parseInfoStore(JSON.stringify({ ...store, ungroupedName: "   " }))?.ungroupedName, "未分组");
+});
+
 test("parsing repairs duplicate and non-finite ordering deterministically", () => {
   const store = emptyInfoStore(1);
   store.sections = [

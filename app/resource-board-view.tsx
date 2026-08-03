@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { deleteResourceSection, htmlText, infoId, moveResource, reorderResourceSections, totalFileBytes, visibleResources, type InfoSection, type InfoStore, type ResourceItem } from "./information";
 import InformationEditor from "./information-editor";
+import InformationItemMenu from "./information-item-menu";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -25,6 +25,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   const draftId = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const columnsRef = useRef<HTMLDivElement | null>(null);
 
   const sections = useMemo(() => [...store.sections].sort((a, b) => a.order - b.order), [store.sections]);
   const editing = store.resources.find((item) => item.id === editingId) ?? null;
@@ -48,7 +49,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
 
   useEffect(() => {
     function key(event: KeyboardEvent) { if (event.key === "Escape") { setResourceMenu(null); setDeleteTarget(null); setDeleteSectionId(null); if (editingId) closeEditor(); else setManageOpen(false); } }
-    function outside(event: PointerEvent) { if (!(event.target instanceof Element) || !event.target.closest(".resource-actions-menu, .board-card-more")) setResourceMenu(null); }
+    function outside(event: PointerEvent) { if (!(event.target instanceof Element) || !event.target.closest(".information-item-menu, .information-move-menu, .board-card-more")) setResourceMenu(null); }
     document.addEventListener("keydown", key); document.addEventListener("pointerdown", outside); return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", outside); };
   });
 
@@ -133,11 +134,11 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
 
     {searching ? (
       <div className="resource-search-list">
-        {searchResults.map((item) => <ResourceRow key={item.id} item={item} query={query} onOpen={() => openEditor(item.id)} onPin={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} onMenu={(button) => { const rect = button.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 156) }); }} />)}
+        {searchResults.map((item) => <ResourceRow key={item.id} item={item} sectionName={sections.find((section) => section.id === item.sectionId)?.name || "未分类"} query={query} onOpen={() => openEditor(item.id)} onPin={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} onMenu={(button) => { const rect = button.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 112) }); }} />)}
         {!searchResults.length && <div className="info-empty"><span>没有匹配结果</span></div>}
       </div>
     ) : (
-      <div className="board-columns">
+      <><div className="board-scroll-controls" aria-label="浏览资料分类"><button onClick={() => columnsRef.current?.scrollBy({ left: -320, behavior: "smooth" })} aria-label="向左查看分类">‹</button><button onClick={() => columnsRef.current?.scrollBy({ left: 320, behavior: "smooth" })} aria-label="向右查看分类">›</button></div><div className="board-columns" ref={columnsRef} onWheel={(event) => { if (event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX)) { event.preventDefault(); event.currentTarget.scrollLeft += event.deltaY; } }}>
         {sections.map((section) => {
           const items = visibleResources(store, section.id, "", "manual");
           return <section className={`board-column${draggedSectionId === section.id ? " dragging" : ""}${dropSectionId === section.id ? " drop-target" : ""}`} key={section.id} id={`board-${section.id}`} onDragOver={(event) => { event.preventDefault(); setDropSectionId(section.id); }} onDragLeave={() => setDropSectionId((current) => current === section.id ? null : current)} onDrop={(event) => { if (draggedSectionId) { const position = event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.getBoundingClientRect().width / 2 ? "after" : "before"; moveSection(draggedSectionId, section.id, position); setDraggedSectionId(null); } else onDropToColumn(section.id); setDropSectionId(null); }}>
@@ -153,13 +154,13 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
                   <span>{item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ") || "开始添加内容"}</span>
                   <small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small>
                 </button>
-                <button className="board-card-more" aria-label={`操作${item.title}`} aria-expanded={resourceMenu?.id === item.id} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 156) }); }}>···</button>
+                <button className="board-card-more" aria-label={`操作${item.title}`} aria-expanded={resourceMenu?.id === item.id} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 112) }); }}>···</button>
               </article>)}
               {!items.length && <div className="board-column-empty"><span>拖动卡片到这里，或点上方＋新建</span></div>}
             </div>
           </section>;
         })}
-      </div>
+      </div></>
     )}
 
     {manageOpen && <div className="info-dialog-backdrop"><section className="info-dialog" role="dialog" aria-modal="true" aria-label="管理分区">
@@ -168,7 +169,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
       <div className="section-add"><input autoFocus value={draftSection} maxLength={40} onChange={(event) => setDraftSection(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSection()} placeholder="新分区名称" /><button onClick={addSection}>新增资料分区</button></div>
       {sections.map((section, index) => <div className="section-manage-row" key={section.id}><input value={section.name} maxLength={40} onFocus={(event) => { event.currentTarget.dataset.original = section.name; }} onChange={(event) => setStore((current) => ({ ...current, sections: current.sections.map((item) => item.id === section.id ? { ...item, name: event.target.value } : item) }))} onBlur={(event) => commitSectionName(section.id, event.currentTarget.value, event.currentTarget.dataset.original || section.name)} /><span>{store.resources.filter((item) => item.sectionId === section.id).length} 项</span><div className="section-order"><button onClick={() => index > 0 && moveSection(section.id, sections[index - 1].id)} disabled={index === 0} aria-label={`上移${section.name}`}>↑</button><button onClick={() => index < sections.length - 1 && moveSection(section.id, sections[index + 1].id, "after")} disabled={index === sections.length - 1} aria-label={`下移${section.name}`}>↓</button></div><button className="section-delete compact-delete" onClick={() => requestRemoveSection(section)} disabled={sections.length <= 1} aria-label={`删除${section.name}`}>×</button></div>)}
     </section></div>}
-    {resourceMenu && createPortal(<div className="resource-actions-menu" style={{ top: resourceMenu.top, left: resourceMenu.left }} role="menu"><span>移动到</span>{sections.filter((section) => store.resources.find((item) => item.id === resourceMenu.id)?.sectionId !== section.id).map((section) => <button key={section.id} onClick={() => { setStore((current) => moveResource(current, resourceMenu.id, section.id) || current); setResourceMenu(null); }}>{section.name}</button>)}<i /><button className="danger" onClick={() => { const item = store.resources.find((value) => value.id === resourceMenu.id); if (item) requestDeleteResource(item); }}>删除资料</button></div>, document.body)}
+    {resourceMenu && (() => { const item = store.resources.find((value) => value.id === resourceMenu.id); if (!item) return null; return <InformationItemMenu top={resourceMenu.top} left={resourceMenu.left} targets={sections.filter((section) => section.id !== item.sectionId)} onMove={(sectionId) => { setStore((current) => moveResource(current, item.id, sectionId) || current); setResourceMenu(null); }} deleteLabel="删除资料" onDelete={() => requestDeleteResource(item)} />; })()}
     {deleteTarget && <ConfirmDelete title="删除资料" text={`确定删除“${deleteTarget.title}”吗？删除后仍可在 5 秒内撤销。`} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDeleteResource} />}
     {deleteSectionId && <div className="info-dialog-backdrop"><section className="info-dialog small" role="dialog" aria-modal="true" aria-label="迁移并删除资料分区"><button className="info-dialog-close" onClick={() => setDeleteSectionId(null)} aria-label="关闭">×</button><h2>迁移并删除分区</h2><div className="category-delete-dialog"><p>先选择资料要迁移到的分区，再删除“{sections.find((item) => item.id === deleteSectionId)?.name}”。</p><select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>{sections.filter((item) => item.id !== deleteSectionId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><footer><button onClick={() => setDeleteSectionId(null)}>取消</button><button className="danger" onClick={confirmRemoveSection}>迁移并删除</button></footer></div></section></div>}
     {storageError && <p className="storage-warn">本地存储异常，改动可能无法保存</p>}
@@ -178,9 +179,9 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
 
 function ConfirmDelete({ title, text, onCancel, onConfirm }: { title: string; text: string; onCancel: () => void; onConfirm: () => void }) { return <div className="info-dialog-backdrop"><section className="info-dialog small" role="alertdialog" aria-modal="true" aria-label={title}><button className="info-dialog-close" onClick={onCancel} aria-label="关闭">×</button><h2>{title}</h2><div className="confirm-delete"><p>{text}</p><footer><button onClick={onCancel}>取消</button><button className="danger" onClick={onConfirm}>确认删除</button></footer></div></section></div>; }
 
-function ResourceRow({ item, query, onOpen, onPin, onMenu }: { item: ResourceItem; query: string; onOpen: () => void; onPin: () => void; onMenu: (button: HTMLButtonElement) => void }) {
+function ResourceRow({ item, sectionName, query, onOpen, onPin, onMenu }: { item: ResourceItem; sectionName: string; query: string; onOpen: () => void; onPin: () => void; onMenu: (button: HTMLButtonElement) => void }) {
   const summary = item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ");
-  return <article className="resource-row"><button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={onPin} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button><button className="resource-main" onClick={onOpen}><strong><HighlightText text={item.title} query={query} /></strong><span><HighlightText text={summary || "开始添加内容"} query={query} /></span><small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small></button><button className="board-card-more" aria-label={`操作${item.title}`} onClick={(event) => onMenu(event.currentTarget)}>···</button></article>;
+  return <article className="resource-row"><button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={onPin} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button><button className="resource-main" onClick={onOpen}><strong><HighlightText text={item.title} query={query} /></strong><span><HighlightText text={summary || "开始添加内容"} query={query} /></span><small><em>{sectionName}</em>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small></button><button className="board-card-more" aria-label={`操作${item.title}`} onClick={(event) => onMenu(event.currentTarget)}>···</button></article>;
 }
 
 function HighlightText({ text, query }: { text: string; query: string }) {
@@ -190,5 +191,5 @@ function HighlightText({ text, query }: { text: string; query: string }) {
 }
 
 function ResourceWorkspace({ item, sections, saveState, fileBytes, onClose, onDelete, onUpdate, onNotice }: { item: ResourceItem; sections: InfoSection[]; saveState: string; fileBytes: number; onClose: () => void; onDelete: () => void; onUpdate: (updater: (item: ResourceItem) => ResourceItem) => void; onNotice: (message: string) => void }) {
-  return <section className="resource-workspace"><header><button className="workspace-back" onClick={onClose}>← 返回看板</button><select value={item.sectionId} onChange={(event) => onUpdate((current) => ({ ...current, sectionId: event.target.value, updatedAt: Date.now() }))}>{sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select><span className={`workspace-save ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="workspace-danger" onClick={onDelete}>删除</button><button className="workspace-close" onClick={onClose} aria-label="关闭">×</button></header><div className="workspace-title"><input value={item.title} maxLength={200} onChange={(event) => onUpdate((current) => ({ ...current, title: event.target.value.slice(0, 200), titleAuto: false, updatedAt: Date.now() }))} aria-label="资料标题" /><span>{item.title.length}/200</span></div><InformationEditor item={item} fileBytes={fileBytes} onUpdate={onUpdate} onNotice={onNotice} /></section>;
+  return <section className="resource-workspace"><header><button className="workspace-back" onClick={onClose}>← 返回看板</button><span className="workspace-category">{sections.find((section) => section.id === item.sectionId)?.name || "未分类"}</span><span className={`workspace-save ${saveState}`}>{saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败" : "已保存"}</span><button className="workspace-danger" onClick={onDelete}>删除</button><button className="workspace-close" onClick={onClose} aria-label="关闭">×</button></header><div className="workspace-title"><input value={item.title} maxLength={200} onChange={(event) => onUpdate((current) => ({ ...current, title: event.target.value.slice(0, 200), titleAuto: false, updatedAt: Date.now() }))} aria-label="资料标题" /><span>{item.title.length}/200</span></div><InformationEditor item={item} fileBytes={fileBytes} onUpdate={onUpdate} onNotice={onNotice} /></section>;
 }

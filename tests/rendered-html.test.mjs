@@ -224,12 +224,12 @@ test("information management exposes complete edit, move and delete actions", as
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(linkView, /aria-label="编辑常用链接"/);
-  assert.match(linkView, /编辑名称和网址/);
+  assert.match(linkView, /onEdit=/);
   assert.match(linkView, /deleteLinkGroup/);
   assert.match(resourceView, /className="section-delete compact-delete"/);
   assert.match(resourceView, /deleteResourceSection/);
   assert.match(resourceView, /role="alertdialog"/);
-  assert.match(resourceView, /className="resource-actions-menu"/);
+  assert.match(resourceView, /<InformationItemMenu/);
   assert.match(resourceView, /确认删除/);
   assert.match(resourceView, /迁移并删除分区/);
   assert.match(linkView, /迁移并删除分组/);
@@ -274,11 +274,11 @@ test("resource board exposes tested manual category and cross-column movement", 
   assert.match(view, /reorderResourceSections/);
   assert.match(view, /moveResource/);
   assert.match(view, /className=\{`board-card\$\{draggedId === item\.id \? " dragging"/);
-  assert.match(view, /className="resource-actions-menu"/);
+  assert.match(view, /<InformationItemMenu/);
   assert.match(view, /aria-label=\{`上移\$\{section\.name\}`\}/);
   assert.match(view, /aria-label=\{`下移\$\{section\.name\}`\}/);
   assert.match(css, /\.board-column\.dragging/);
-  assert.match(css, /\.resource-actions-menu/);
+  assert.match(css, /\.information-item-menu/);
 });
 
 test("mobile resource board remains a fixed-width horizontal board", async () => {
@@ -321,4 +321,26 @@ test("information hydration and cross-tab sync do not write stale data back", as
   assert.match(page, /const suppressInfoSave = useRef\(false\)/);
   assert.match(page, /suppressInfoSave\.current = true; setInfoStore\(parsedInfo\)/);
   assert.match(page, /if \(suppressInfoSave\.current\) \{ suppressInfoSave\.current = false; return; \}/);
+});
+
+test("shared information controls match the record interaction pattern", async () => {
+  const [links, resources, records, menu, css, page] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/link-library-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/resource-board-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/records-view.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/information-item-menu.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+  ]);
+  assert.match(menu, /className="move-trigger"/);
+  assert.match(menu, /information-move-menu/);
+  assert.match(css, /\.information-item-menu, \.information-move-menu/);
+  assert.match(records, /setDeleteTarget\(item\)/);
+  assert.match(records, /title="删除记录"/);
+  assert.match(links, /ungroupedName/);
+  assert.match(resources, /className="workspace-category"/);
+  assert.match(resources, /sectionName=/);
+  assert.match(resources, /board-scroll-controls/);
+  assert.doesNotMatch(page, /activePage === "links" \|\| activePage === "resources"/);
+  assert.match(page, /setTimeout\(\(\) => setNotice\(""\), 3200\)/);
 });
