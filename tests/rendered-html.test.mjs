@@ -325,7 +325,8 @@ test("links and resources use compact manual boards without redundant tabs or so
   assert.doesNotMatch(links, />排序：|aria-label="网格视图"|aria-label="列表视图"|aria-label="分组索引"/);
   assert.doesNotMatch(resources, />排序：|aria-label="分区索引"/);
   assert.match(links, /className="link-columns"/);
-  assert.match(links, /className=\{`link-column/);
+  assert.match(links, /className=\{`link-column board-column/);
+  assert.match(links, /EditableGroupRow/);
   assert.match(links, /draggedId === item\.id \? " dragging"/);
   assert.match(resources, /draggedId === item\.id \? " dragging"/);
   const css = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8"));
@@ -334,6 +335,7 @@ test("links and resources use compact manual boards without redundant tabs or so
 
 test("information hydration and cross-tab sync do not write stale data back", async () => {
   const page = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8"));
+  assert.doesNotMatch(page, /已同步另一标签页的信息修改/);
   assert.match(page, /const suppressInfoSave = useRef\(false\)/);
   assert.match(page, /const infoStoreRef = useRef\(infoStore\)/);
   assert.match(page, /suppressInfoSave\.current = true; infoStoreRef\.current = parsedInfo; setInfoStore\(parsedInfo\)/);

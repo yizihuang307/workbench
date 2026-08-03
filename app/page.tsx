@@ -204,7 +204,6 @@ export default function Home() {
         suppressInfoSave.current = true;
         infoStoreRef.current = parsed;
         setInfoStore(parsed);
-        setNotice("已同步另一标签页的信息修改");
       });
     }
     window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
