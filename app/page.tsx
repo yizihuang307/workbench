@@ -400,11 +400,11 @@ function CompletionHistory({ history }: { history: CompletionRecord[] }) {
         <button role="tab" aria-selected={mode === "week"} className={mode === "week" ? "active" : ""} onClick={() => setMode("week")}>按周查看</button>
       </div>
     </header>
-    <div className="history-range"><button onClick={() => move(mode === "day" ? -1 : -7)} aria-label="上一时段">←</button><div className="history-date-control"><label><span>{label}</span><input type="date" value={dateValue} onChange={(event) => chooseDate(event.target.value)} aria-label="选择完成记录日期" /></label><button className="history-today" onClick={() => setAnchor(Date.now())}>回到今天</button></div><button onClick={() => move(mode === "day" ? 1 : 7)} aria-label="下一时段">→</button></div>
+    <div className="history-range"><button onClick={() => move(mode === "day" ? -1 : -7)} aria-label="上一时段">←</button><div className="history-date-control"><input type="date" value={dateValue} onChange={(event) => chooseDate(event.target.value)} aria-label="选择完成记录日期" title={label} />{mode === "week" && <span className="history-period-label">{label}</span>}</div><button onClick={() => move(mode === "day" ? 1 : 7)} aria-label="下一时段">→</button></div>
     <p className="history-summary">共完成 <strong>{items.length}</strong> 项</p>
     {items.length ? <div className="history-list">{Object.entries(grouped).map(([date, records]) => <section key={date}>
       {mode === "week" && <h3>{formatDate(Number(date))}</h3>}
-      {records.map((item) => <article key={item.taskId}><span aria-hidden>✓</span><div><strong>{item.label}</strong><small>{SOURCE_NAME[item.source]} · {new Date(item.completedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</small></div></article>)}
+      {records.map((item) => <article key={item.taskId}><span aria-hidden>✓</span><div className="history-item-title">{item.label}</div><small>{SOURCE_NAME[item.source]} · {new Date(item.completedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</small></article>)}
     </section>)}</div> : <div className="history-empty"><b>✓</b><strong>这个时段还没有完成事项</strong><span>完成事项后会自动出现在这里</span></div>}
   </section>;
 }
