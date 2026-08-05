@@ -114,19 +114,34 @@ export default function LoginPage() {
           {loading ? "处理中…" : isSignUp ? "注册" : "登录"}
         </button>
 
-        <p className="auth-switch">
-          {isSignUp ? "已有账号？" : "没有账号？"}
+        {!isSignUp && (
           <button
             type="button"
-            className="auth-link"
+            className="auth-button secondary"
             onClick={() => {
-              setIsSignUp(!isSignUp);
+              setIsSignUp(true);
               setError("");
             }}
           >
-            {isSignUp ? "去登录" : "去注册"}
+            注册新账号
           </button>
-        </p>
+        )}
+
+        {isSignUp && (
+          <p className="auth-switch">
+            已有账号？
+            <button
+              type="button"
+              className="auth-link"
+              onClick={() => {
+                setIsSignUp(false);
+                setError("");
+              }}
+            >
+              去登录
+            </button>
+          </p>
+        )}
       </form>
     </main>
   );
