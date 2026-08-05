@@ -3,19 +3,21 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const NAV_ITEMS = [
-  { key: "today", href: "/today", label: "今日事", icon: "📅" },
-  { key: "records", href: "/records", label: "随手记", icon: "📝" },
-  { key: "links", href: "/links", label: "传送门", icon: "🔗" },
-  { key: "resources", href: "/resources", label: "资料库", icon: "📚" },
+  { key: "today", href: "/today", label: "今日事", icon: "\u{1F4C5}" },
+  { key: "records", href: "/records", label: "随手记", icon: "\u{1F4DD}" },
+  { key: "links", href: "/links", label: "传送门", icon: "\u{1F517}" },
+  { key: "resources", href: "/resources", label: "资料库", icon: "\u{1F4DA}" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -24,20 +26,54 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function close(e: PointerEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    function closeByKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", closeByKey);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", closeByKey);
+    };
+  }, [menuOpen]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
-    router.push("/login");
+    window.location.href = "/login";
   }
 
   return (
     <main className="workbench">
       <aside className="sidebar">
-        <div className="brand">
-          <span>W</span>
-          <div>
-            <strong>我的工作台</strong>
-            <small>PERSONAL OS</small>
-          </div>
+        <div className="brand" ref={menuRef}>
+          <button
+            className="brand-button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-expanded={menuOpen}
+            aria-label="用户菜单"
+          >
+            <span>W</span>
+            <div>
+              <strong>我的工作台</strong>
+              <small>PERSONAL OS</small>
+            </div>
+            <span className="brand-chevron" aria-hidden>{menuOpen ? "▴" : "▾"}</span>
+          </button>
+          {menuOpen && (
+            <div className="brand-dropdown" role="menu">
+              {userEmail && (
+                <div className="brand-dropdown-user">{userEmail}</div>
+              )}
+              <button className="brand-dropdown-item" onClick={handleLogout}>
+                退出登录
+              </button>
+            </div>
+          )}
         </div>
         <nav aria-label="主导航">
           {NAV_ITEMS.map((item) => (
@@ -51,29 +87,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        {userEmail && (
-          <div style={{ marginTop: "auto", padding: "12px 8px" }}>
-            <small style={{ color: "rgba(255,255,255,.5)", fontSize: 11 }}>
-              {userEmail}
-            </small>
-            <button
-              onClick={handleLogout}
-              style={{
-                display: "block",
-                marginTop: 6,
-                padding: "4px 8px",
-                border: "1px solid rgba(255,255,255,.2)",
-                borderRadius: 6,
-                background: "transparent",
-                color: "rgba(255,255,255,.6)",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              退出
-            </button>
-          </div>
-        )}
       </aside>
       <section className="content">{children}</section>
     </main>

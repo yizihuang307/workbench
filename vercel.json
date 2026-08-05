@@ -1,0 +1,16 @@
+{
+  "framework": null,
+  "installCommand": "npm install && npx vinext build",
+  "builds": [
+    {
+      "src": "scripts/vercel-handler.cjs",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": "dist/**"
+      }
+    }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/scripts/vercel-handler.cjs" }
+  ]
+}
