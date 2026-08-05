@@ -8,8 +8,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "邮箱和密码不能为空" }, { status: 400 });
   }
 
-  // 先创建响应，让 setAll 能把 cookie 写进去
-  const response = NextResponse.json({ success: true });
+  // 收集要设置的 cookie
+  const cookiesToSet: Array<{ name: string; value: string; options: any }> = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,10 +19,8 @@ export async function POST(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
+        setAll(setCookies) {
+          cookiesToSet.push(...setCookies);
         },
       },
     },
@@ -40,6 +38,18 @@ export async function POST(request: NextRequest) {
   if (!data.session) {
     return NextResponse.json({ error: "登录失败" }, { status: 500 });
   }
+
+  // 创建响应并手动设置 Set-Cookie header
+  const response = NextResponse.json({ success: true });
+  cookiesToSet.forEach(({ name, value, options }) => {
+    const cookieParts = [`${name}=${encodeURIComponent(value)}`];
+    if (options.maxAge !== undefined) cookieParts.push(`Max-Age=${options.maxAge}`);
+    if (options.path) cookieParts.push(`Path=${options.path}`);
+    if (options.httpOnly) cookieParts.push("HttpOnly");
+    if (options.secure) cookieParts.push("Secure");
+    if (options.sameSite) cookieParts.push(`SameSite=${options.sameSite}`);
+    response.headers.append("Set-Cookie", cookieParts.join("; "));
+  });
 
   return response;
 }
