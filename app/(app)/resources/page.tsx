@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type ResourceCategory = {
   id: string;
@@ -23,6 +24,7 @@ type ResourceItem = {
 };
 
 export default function ResourcesPage() {
+  const router = useRouter();
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [ready, setReady] = useState(false);
@@ -119,7 +121,7 @@ export default function ResourcesPage() {
                       <button className={`resource-pin ${r.is_pinned ? "active" : ""}`} aria-label="置顶">
                         {r.is_pinned ? "★" : "☆"}
                       </button>
-                      <div className="resource-main">
+                      <div className="resource-main" onClick={() => router.push(`/resources/${r.id}`)} style={{ cursor: "pointer" }}>
                         <strong>{r.title || "未命名资料"}</strong>
                         <span>{r.plain_text?.slice(0, 80) || "空资料"}</span>
                         <small>{new Date(r.updated_at).toLocaleDateString("zh-CN")}</small>

@@ -49,6 +49,17 @@ export async function POST(request: Request) {
   const url = parsed.data.url;
   const normalizedUrl = url.replace(/\/$/, "").toLowerCase();
 
+  // 获取 favicon URL
+  let faviconUrl: string | null = null;
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname;
+    // 使用 Google 的 favicon 服务作为默认方案
+    faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
+  } catch {
+    // URL 解析失败，不设置 favicon
+  }
+
   const { data, error } = await supabase
     .from("links")
     .insert({
@@ -57,6 +68,7 @@ export async function POST(request: Request) {
       url,
       normalized_url: normalizedUrl,
       name: parsed.data.name ?? url,
+      favicon_url: faviconUrl,
       sort_key: String(Date.now()),
       version: 1,
     })

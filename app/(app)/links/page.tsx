@@ -180,6 +180,23 @@ export default function LinksPage() {
                           try { await fetch(`/api/links/${link.id}/open`, { method: "POST" }); } catch {}
                         }}
                       >
+                        {link.favicon_url && (
+                          <img
+                            src={link.favicon_url}
+                            alt=""
+                            className="link-favicon"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              const url = new URL(link.url);
+                              const fallback = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`;
+                              if (target.src !== fallback) {
+                                target.src = fallback;
+                              } else {
+                                target.style.display = "none";
+                              }
+                            }}
+                          />
+                        )}
                         <strong>{link.name || link.url}</strong>
                         <span>{link.url}</span>
                       </a>

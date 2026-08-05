@@ -13,12 +13,10 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          try {
-            for (const { name, value, options } of cookiesToSet) {
-              cookieStore.set(name, value, options);
-            }
-          } catch {
-            // Server Component 中不能 set cookies，由 Middleware 处理
+          // 在 Route Handler 中，cookies() 是可写的
+          // 在 Server Components 中会抛出错误，由 Middleware 处理
+          for (const { name, value, options } of cookiesToSet) {
+            cookieStore.set(name, value, options);
           }
         },
       },

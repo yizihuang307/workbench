@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type RecordCategory = {
   id: string;
@@ -25,16 +26,14 @@ type RecordItem = {
 type Deleted = { record: RecordItem };
 
 export default function RecordsPage() {
+  const router = useRouter();
   const [categories, setCategories] = useState<RecordCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState("all");
   const [records, setRecords] = useState<RecordItem[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [deleted, setDeleted] = useState<Deleted | null>(null);
-  const [editorContent, setEditorContent] = useState("");
-  const [saving, setSaving] = useState(false);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadCategories = useCallback(async () => {
@@ -65,20 +64,6 @@ export default function RecordsPage() {
     return () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); };
   }, [notice]);
 
-  const selected = records.find((r) => r.id === selectedId);
-
-  // 选择记录后加载内容
-  useEffect(() => {
-    if (selected) {
-      try {
-        const doc = JSON.parse(selected.document_json);
-        setEditorContent(doc.text ?? selected.plain_text ?? "");
-      } catch {
-        setEditorContent(selected.plain_text ?? "");
-      }
-    }
-  }, [selectedId]);
-
   async function createRecord() {
     const catId = categories[0]?.id;
     if (!catId) return setNotice("请先创建分类");
@@ -90,40 +75,17 @@ export default function RecordsPage() {
       });
       if (!res.ok) throw new Error("创建失败");
       const json = await res.json();
-      setRecords((prev) => [json.data as RecordItem, ...prev]);
-      setSelectedId(json.data.id);
+      const newRecord = json.data as RecordItem;
+      router.push(`/records/${newRecord.id}`);
     } catch {
       setNotice("创建失败");
     }
-  }
-
-  async function saveRecord() {
-    if (!selected) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/records/${selected.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentJson: JSON.stringify({ text: editorContent }),
-          plainText: editorContent,
-          version: selected.version,
-        }),
-      });
-      if (!res.ok) throw new Error("保存失败");
-      const json = await res.json();
-      setRecords((prev) => prev.map((r) => (r.id === selected.id ? json.data as RecordItem : r)));
-    } catch {
-      setNotice("保存失败");
-    }
-    setSaving(false);
   }
 
   async function deleteRecord(id: string) {
     const record = records.find((r) => r.id === id);
     if (!record) return;
     setRecords((prev) => prev.filter((r) => r.id !== id));
-    if (selectedId === id) setSelectedId(null);
     setDeleted({ record });
     try {
       const res = await fetch(`/api/records/${id}`, { method: "DELETE" });
@@ -204,8 +166,8 @@ export default function RecordsPage() {
               records.map((r) => (
                 <div
                   key={r.id}
-                  className={`record-card ${selectedId === r.id ? "selected" : ""}`}
-                  onClick={() => setSelectedId(r.id)}
+                  className="record-card"
+                  onClick={() => router.push(`/records/${r.id}`)}
                 >
                   <button
                     className={`pin ${r.is_pinned ? "active" : ""}`}
@@ -230,38 +192,6 @@ export default function RecordsPage() {
               ))
             )}
           </div>
-        </div>
-
-        <div className="record-editor">
-          {selected ? (
-            <>
-              <header>
-                <span className="editor-category">
-                  {categories.find((c) => c.id === selected.category_id)?.name ?? "未分类"}
-                </span>
-                <span className={`save-state ${saving ? "saving" : ""}`}>
-                  {saving ? "保存中…" : "已保存"}
-                </span>
-                <button className="editor-close" onClick={() => setSelectedId(null)} aria-label="关闭">
-                  ×
-                </button>
-              </header>
-              <textarea
-                className="record-document-editor"
-                value={editorContent}
-                onChange={(e) => setEditorContent(e.target.value)}
-                onBlur={saveRecord}
-                placeholder="开始记录..."
-                data-placeholder="开始记录..."
-              />
-            </>
-          ) : (
-            <div className="editor-placeholder">
-              <b>+</b>
-              <p>选择一条记录开始编辑</p>
-              <span>或创建新的记录</span>
-            </div>
-          )}
         </div>
       </div>
 
