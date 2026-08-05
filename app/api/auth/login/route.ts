@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "登录失败" }, { status: 500 });
   }
 
+  // 调用 getUser() 触发 setAll 回调，确保 cookie 被收集
+  await supabase.auth.getUser();
+
   // 创建响应并手动设置 Set-Cookie header
   const response = NextResponse.json({ success: true });
   cookiesToSet.forEach(({ name, value, options }) => {
