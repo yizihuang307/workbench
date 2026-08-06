@@ -18,7 +18,7 @@ if [[ ! -x "${vinext}" ]]; then
   exit 69
 fi
 
-mkdir -p .wrangler/deploy
+rm -rf .wrangler 2>/dev/null; mkdir -p .wrangler/deploy
 
 echo "Running bounded vinext build..."
 timeout \
