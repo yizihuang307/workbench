@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { applyAiResult, blocksText, moveAndDeleteCategory, recordBlocks, recordId, validCategoryName, visibleRecords, type RecordBlock, type RecordItem, type RecordStore } from "./records";
 
-type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; storageError: boolean; onNotice: (message: string) => void };
+type Props = { store: RecordStore; setStore: React.Dispatch<React.SetStateAction<RecordStore>>; storageError: boolean; onNotice: (message: string) => void; initialSelectedId?: string | null; onSelectedChange?: (id: string | null) => void };
 
-export default function RecordsView({ store, setStore, storageError, onNotice }: Props) {
+export default function RecordsView({ store, setStore, storageError, onNotice, initialSelectedId = null, onSelectedChange }: Props) {
   const [categoryId, setCategoryId] = useState("all");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
@@ -39,6 +39,13 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     undoTimers.current.forEach(clearTimeout);
   }, []);
 
+  useEffect(() => setSelectedId(initialSelectedId), [initialSelectedId]);
+
+  function selectRecord(id: string | null) {
+    setSelectedId(id);
+    onSelectedChange?.(id);
+  }
+
 
   useEffect(() => {
     function closeMenu(event: MouseEvent) {
@@ -54,7 +61,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
     const now = Date.now();
     const item = { id: recordId(), categoryId: targetCategoryId, body: "", blocks: [{ type: "text" as const, text: "" }], images: [], pinned: false, createdAt: now, updatedAt: now };
     setStore((current) => ({ ...current, records: [item, ...current.records] }));
-    setSelectedId(item.id);
+    selectRecord(item.id);
   }
 
   function editDocument(blocks: RecordBlock[]) {
@@ -97,7 +104,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
 
   function deleteRecord(item: RecordItem) {
     setStore((current) => ({ ...current, records: current.records.filter((record) => record.id !== item.id) }));
-    if (selectedId === item.id) setSelectedId(null);
+    if (selectedId === item.id) selectRecord(null);
     setDeleted((current) => [...current, item]);
     const timer = setTimeout(() => {
       setDeleted((current) => current.filter((record) => record.id !== item.id));
@@ -179,7 +186,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
       <section className="record-browser">
         <div className="record-toolbar"><div className="record-toolbar-title"><div><h2>{title}</h2><span>共 {records.length} 项</span></div><button className="record-create" onClick={() => createRecord()} aria-label="新建记录" title="新建记录">＋</button></div><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索记录正文" aria-label="搜索记录正文" /></div>
         <div className="record-list">
-          {records.map((item) => { const lines = item.body.trim().split(/\n+/); const preview = lines.slice(1).join(" ") || lines[0] || "开始输入正文…"; return <article key={item.id} className={`record-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}>
+          {records.map((item) => { const lines = item.body.trim().split(/\n+/); const preview = lines.slice(1).join(" ") || lines[0] || "开始输入正文…"; return <article key={item.id} className={`record-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => selectRecord(item.id)}>
             <button className={`pin ${item.pinned ? "active" : ""}`} onClick={(event) => { event.stopPropagation(); togglePinned(item); }} aria-label={item.pinned ? "取消置顶" : "置顶"} title={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
             <div><strong>{highlight(lines[0] || "新记录", query)}</strong><p>{highlight(preview, query)}</p>{recordBlocks(item).filter((block) => block.type === "image").length ? <small>含 {recordBlocks(item).filter((block) => block.type === "image").length} 张图片 · </small> : null}<small>{new Date(item.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>
             <div className="record-actions"><button className="record-more" onClick={(event) => { event.stopPropagation(); const opening = menuId !== item.id; setMenuId(opening ? item.id : null); setMoveMenuId(null); }} aria-label="记录操作" title="记录操作">···</button>{menuId === item.id && <div className="record-menu" onClick={(event) => event.stopPropagation()} onMouseLeave={scheduleMoveMenuClose}><button className="move-trigger" onMouseEnter={(event) => showMoveMenu(item.id, event.currentTarget)} onFocus={(event) => showMoveMenu(item.id, event.currentTarget)} onClick={(event) => showMoveMenu(item.id, event.currentTarget)} aria-haspopup="menu" aria-expanded={moveMenuId === item.id}>移动到 <span>›</span></button>{moveMenuId === item.id && createPortal(<div className="record-move-menu" role="menu" style={{ top: moveMenuPosition.top, left: moveMenuPosition.left }} onMouseEnter={keepMoveMenuOpen} onMouseLeave={scheduleMoveMenuClose} onClick={(event) => event.stopPropagation()}>{store.categories.filter((category) => category.id !== item.categoryId).map((category) => <button role="menuitem" key={category.id} onClick={() => moveRecord(item, category.id)}>{category.name}</button>)}</div>, document.body)}<button className="danger" onMouseEnter={() => setMoveMenuId(null)} onClick={() => { setMenuId(null); setMoveMenuId(null); setDeleteTarget(item); }}>删除记录</button></div>}</div>
@@ -188,7 +195,7 @@ export default function RecordsView({ store, setStore, storageError, onNotice }:
         </div>
       </section>
       <section className={`record-editor ${selected ? "open" : ""}`} aria-label="记录编辑器">
-        {selected ? <><header><span className="editor-category">{store.categories.find((category) => category.id === selected.categoryId)?.name}</span><span className="editor-count">{selected.body.length} / 30000</span><span className={`save-state ${visibleSaveState}`}>{visibleSaveState === "saving" ? "保存中…" : visibleSaveState === "error" ? "保存失败" : "已保存"}</span><button className="ai-button" disabled={aiBusyIds.includes(selected.id) || !selected.body.trim()} onClick={organize}><span>{aiBusyIds.includes(selected.id) ? "正在整理…" : "AI 整理"}</span></button><button className="editor-close" onClick={() => setSelectedId(null)} aria-label="关闭编辑器" title="关闭">×</button></header>
+        {selected ? <><header><span className="editor-category">{store.categories.find((category) => category.id === selected.categoryId)?.name}</span><span className="editor-count">{selected.body.length} / 30000</span><span className={`save-state ${visibleSaveState}`}>{visibleSaveState === "saving" ? "保存中…" : visibleSaveState === "error" ? "保存失败" : "已保存"}</span><button className="ai-button" disabled={aiBusyIds.includes(selected.id) || !selected.body.trim()} onClick={organize}><span>{aiBusyIds.includes(selected.id) ? "正在整理…" : "AI 整理"}</span></button><button className="editor-close" onClick={() => selectRecord(null)} aria-label="关闭编辑器" title="关闭">×</button></header>
           <DocumentEditor key={`${selected.id}-${editorEpoch}`} record={selected} onChange={editDocument} onNotice={onNotice} onPreview={setPreviewImage} /></> : <div className="editor-placeholder"><b>记</b><p>选择一条记录继续编辑</p><span>内容会自动保存</span></div>}
       </section>
     </div>

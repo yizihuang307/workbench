@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ALL_GROUP, dataUrlBytes, deleteLinkGroup, deleteResourceSection, deriveTitle, DOCUMENT_LIMIT, emptyInfoStore, FILE_LIMIT, htmlText, legacyDocumentHtml, linkifyPlainText, moveLink, moveResource, parseInfoStore, reorderLinkGroups, reorderResourceSections, safeUrl, sanitizeDocumentHtml, sortLinks, sortResources, tableHtml, totalFileBytes, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, visibleResources, type InfoStore, type ResourceItem, type SystemItem } from "../app/information";
+import { ALL_GROUP, dataUrlBytes, deleteLinkGroup, deleteResourceSection, deriveTitle, DOCUMENT_LIMIT, emptyInfoStore, FILE_LIMIT, htmlText, legacyDocumentHtml, linkifyPlainText, moveLink, moveResource, parseInfoStore, reorderLinkGroups, reorderResourceSections, safeUrl, sanitizeDocumentHtml, siteIcon, sortLinks, sortResources, tableHtml, totalFileBytes, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, visibleResources, type InfoStore, type ResourceItem, type SystemItem } from "../app/information";
 
 test("unsafe and malformed links are rejected", () => {
   assert.equal(safeUrl("javascript:alert(1)"), null);
@@ -171,6 +171,11 @@ test("system icon URL survives storage parsing", () => {
   assert.equal(parseInfoStore(JSON.stringify(store))?.systems[0].icon, "https://example.com/favicon.ico");
 });
 
+test("new links always receive a favicon URL", () => {
+  assert.equal(siteIcon("https://example.com/path", "https://cdn.example.com/icon.png"), "https://cdn.example.com/icon.png");
+  assert.match(siteIcon("https://example.com/path", "E"), /^https:\/\/www\.google\.com\/s2\/favicons\?/);
+});
+
 test("legacy letter icons migrate to a persistent favicon URL", () => {
   const store: InfoStore = { ...emptyInfoStore(1), systems: [makeSystem({ icon: "S" })] };
   assert.match(parseInfoStore(JSON.stringify(store))?.systems[0].icon || "", /^https:\/\/www\.google\.com\/s2\/favicons\?/);
@@ -302,6 +307,16 @@ test("link groups reorder and group deletion preserves links", () => {
   const migrated = deleteLinkGroup(reordered!, "g2", "g1");
   assert.equal(migrated?.systems[0].groupId, "g1");
   assert.equal(deleteLinkGroup(reordered!, "g2", "missing"), null);
+});
+
+test("ungrouped column participates in persisted group ordering", () => {
+  const store = emptyInfoStore(1);
+  store.linkGroups = [{ id: "g1", name: "工具", order: 1, createdAt: 1 }, { id: "g2", name: "协作", order: 2, createdAt: 2 }];
+  const moved = reorderLinkGroups(store, UNGROUPED, "g2", "after");
+  assert.equal(moved?.ungroupedOrder, 2);
+  assert.equal(parseInfoStore(JSON.stringify(moved))?.ungroupedOrder, 2);
+  const restored = reorderLinkGroups(moved!, UNGROUPED, "g1");
+  assert.equal(restored?.ungroupedOrder, 0);
 });
 
 test("links reorder within and move across groups with normalized orders", () => {

@@ -8,6 +8,7 @@ import ResourceBoardView from "./resource-board-view";
 import { emptyInfoStore, type InfoStore } from "./information";
 import { INFO_SYNC_KEY, loadInfoStore, migrateLegacyInfoStore, saveInfoStore } from "./information-storage";
 import { addCompletion, cleanCompletionHistory, completionsForDay, completionsForWeek, dayStart, removeCompletion, weekStart, type CompletionRecord } from "./completion-history";
+import { createClient } from "@/lib/supabase/client";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -29,6 +30,13 @@ type Store = {
   completionHistory: CompletionRecord[];
 };
 type Deleted = { task: Task; group: Group; index: number };
+type PageKey = "schedule" | "records" | "links" | "resources";
+
+function routeState(pathname: string) {
+  const [, section, id] = pathname.split("/");
+  const page: PageKey = section === "records" || section === "links" || section === "resources" ? section : "schedule";
+  return { page, detailId: id || null };
+}
 
 const STORAGE_KEY = "workbench.schedule.v1";
 const GROUPS: Group[] = ["today", "week", "later"];
@@ -107,7 +115,9 @@ export default function Home() {
   const [recordStorageError, setRecordStorageError] = useState(false);
   const [infoStore, setInfoStore] = useState<InfoStore>(emptyInfoStore);
   const [infoStorageError, setInfoStorageError] = useState(false);
-  const [activePage, setActivePage] = useState<"schedule" | "records" | "links" | "resources">("schedule");
+  const [activePage, setActivePage] = useState<PageKey>("schedule");
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Group | null>(null);
@@ -120,6 +130,17 @@ export default function Home() {
   const suppressInfoSave = useRef(false);
   const infoStoreRef = useRef(infoStore);
   const expandButtons = useRef<Partial<Record<Group, HTMLButtonElement | null>>>({});
+
+  useEffect(() => {
+    function syncRoute() {
+      const route = routeState(window.location.pathname);
+      setActivePage(route.page);
+      setDetailId(route.detailId);
+    }
+    syncRoute();
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -319,14 +340,36 @@ export default function Home() {
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
   const actions = { addTask, toggleTask, togglePriority, editTask, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
 
+  async function handleLogout() {
+    await createClient().auth.signOut();
+    window.location.href = "/login";
+  }
+
+  function navigate(page: PageKey) {
+    const pathname = page === "schedule" ? "/" : `/${page}`;
+    window.history.pushState({}, "", pathname);
+    setActivePage(page);
+    setDetailId(null);
+  }
+
+  function setDetail(page: "records" | "resources", id: string | null) {
+    window.history.pushState({}, "", id ? `/${page}/${encodeURIComponent(id)}` : `/${page}`);
+    setDetailId(id);
+  }
+
   return <main className="workbench" aria-busy={!ready}>
     <aside className="sidebar">
-      <div className="brand"><span>W</span><div><strong>我的工作台</strong><small>PERSONAL OS</small></div></div>
+      <div className="brand" style={{ position: "relative" }}>
+        <button className="brand-button" onClick={() => setAccountOpen(!accountOpen)} aria-expanded={accountOpen}>
+          <span>W</span><div><strong>我的工作台</strong><small>PERSONAL OS</small></div>
+        </button>
+        {accountOpen && <div className="brand-dropdown"><button onClick={handleLogout}>退出登录</button></div>}
+      </div>
       <nav aria-label="主导航">
-        <button className={activePage === "schedule" ? "active" : ""} onClick={() => setActivePage("schedule")}><span aria-hidden>📅</span>今日事</button>
-        <button className={activePage === "records" ? "active" : ""} onClick={() => setActivePage("records")}><span aria-hidden>📝</span>随手记</button>
-        <button className={activePage === "links" ? "active" : ""} onClick={() => setActivePage("links")}><span aria-hidden>🔗</span>传送门</button>
-        <button className={activePage === "resources" ? "active" : ""} onClick={() => setActivePage("resources")}><span aria-hidden>📚</span>资料库</button>
+        <button className={activePage === "schedule" ? "active" : ""} onClick={() => navigate("schedule")}><span aria-hidden>📅</span>今日事</button>
+        <button className={activePage === "records" ? "active" : ""} onClick={() => navigate("records")}><span aria-hidden>📝</span>随手记</button>
+        <button className={activePage === "links" ? "active" : ""} onClick={() => navigate("links")}><span aria-hidden>🔗</span>传送门</button>
+        <button className={activePage === "resources" ? "active" : ""} onClick={() => navigate("resources")}><span aria-hidden>📚</span>资料库</button>
         {/* 心情模块暂时隐藏：恢复时重新启用导航入口。 */}
       </nav>
     </aside>
@@ -349,7 +392,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} /></section> : activePage === "links" ? <section className="content"><LinkLibraryView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section> : <section className="content"><ResourceBoardView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section>}
+    </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} initialSelectedId={detailId} onSelectedChange={(id) => setDetail("records", id)} /></section> : activePage === "links" ? <section className="content"><LinkLibraryView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section> : <section className="content"><ResourceBoardView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} initialEditingId={detailId} onEditingChange={(id) => setDetail("resources", id)} /></section>}
 
     {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
       <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />

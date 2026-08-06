@@ -22,7 +22,25 @@ export default async function proxy(request: NextRequest) {
   );
 
   // 刷新过期的 session
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+  const pathname = request.nextUrl.pathname;
+  const isPublic = pathname === "/login" || pathname.startsWith("/auth/");
+  if (!user && !isPublic) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+  if (user && pathname === "/login") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (user && pathname === "/today") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (user && /^\/(records|links|resources)(\/[^/]+)?$/.test(pathname)) {
+    const response = NextResponse.rewrite(new URL("/", request.url));
+    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie);
+    return response;
+  }
 
   return supabaseResponse;
 }

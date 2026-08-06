@@ -10,7 +10,7 @@ export type FileBlock = { id: string; type: "file"; name: string; mime: string; 
 export type InfoBlock = TextBlock | LinkBlock | FileBlock;
 // v2：资源增加 order 字段支持看板内手动排序；保留 documentHtml 以兼容统一文档编辑器。
 export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; documentHtml?: string; blocks: InfoBlock[]; pinned: boolean; order: number; createdAt: number; updatedAt: number };
-export type InfoStore = { version: 2; ungroupedName: string; linkGroups: LinkGroup[]; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
+export type InfoStore = { version: 2; ungroupedName: string; ungroupedOrder: number; linkGroups: LinkGroup[]; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
 
 // 链接分组：空字符串代表“未分组”。
 export const UNGROUPED = "";
@@ -26,7 +26,7 @@ export const TOTAL_FILE_LIMIT = 200 * 1024 * 1024;
 export function infoId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`; }
 
 export function emptyInfoStore(now = Date.now()): InfoStore {
-  return { version: 2, ungroupedName: "未分组", linkGroups: [], sections: [
+  return { version: 2, ungroupedName: "未分组", ungroupedOrder: 0, linkGroups: [], sections: [
     { id: "work", name: "工作资料", type: "resources", order: 0, createdAt: now },
     { id: "learning", name: "学习收藏", type: "resources", order: 1, createdAt: now + 1 },
   ], systems: [], resources: [] };
@@ -114,6 +114,12 @@ export function urlMeta(input: string) {
   const host = url.hostname.replace(/^www\./, "");
   const name = host.split(".")[0] || host;
   return { url: normalized, domain: host, name: name.charAt(0).toLocaleUpperCase() + name.slice(1), icon: name.charAt(0).toLocaleUpperCase() || "站" };
+}
+
+export function siteIcon(url: string, detectedIcon?: string | null) {
+  if (detectedIcon && /^https?:\/\//i.test(detectedIcon)) return detectedIcon;
+  const hostname = new URL(url).hostname;
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
 }
 
 export function totalFileBytes(store: InfoStore) {
@@ -207,13 +213,18 @@ export function reorderResourceSections(store: InfoStore, draggedId: string, tar
 
 export function reorderLinkGroups(store: InfoStore, draggedId: string, targetId: string, position: "before" | "after" = "before") {
   if (draggedId === targetId) return null;
-  const groups = [...store.linkGroups].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+  const ungrouped: LinkGroup = { id: UNGROUPED, name: store.ungroupedName, order: store.ungroupedOrder, createdAt: 0 };
+  const groups = [ungrouped, ...store.linkGroups].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
   const from = groups.findIndex((item) => item.id === draggedId), target = groups.findIndex((item) => item.id === targetId);
   if (from < 0 || target < 0) return null;
   const [picked] = groups.splice(from, 1);
   const nextTarget = groups.findIndex((item) => item.id === targetId);
   groups.splice(nextTarget + (position === "after" ? 1 : 0), 0, picked);
-  return { ...store, linkGroups: groups.map((item, order) => ({ ...item, order })) };
+  return {
+    ...store,
+    ungroupedOrder: groups.findIndex((item) => item.id === UNGROUPED),
+    linkGroups: groups.filter((item) => item.id !== UNGROUPED).map((item) => ({ ...item, order: groups.findIndex((group) => group.id === item.id) })),
+  };
 }
 
 export function deleteLinkGroup(store: InfoStore, groupId: string, targetGroupId = UNGROUPED) {
@@ -337,7 +348,9 @@ export function parseInfoStore(raw: string): InfoStore | null {
     const normalizedResources = normalizedSections.flatMap((section) => resources.filter((item) => item.sectionId === section.id).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((item, order) => ({ ...item, order })));
     const normalizedSystems = [UNGROUPED, ...normalizedGroups.map((group) => group.id)].flatMap((groupId) => systems.filter((item) => item.groupId === groupId).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((item, order) => ({ ...item, order })));
     const ungroupedName = isV2 && typeof (value as { ungroupedName?: unknown }).ungroupedName === "string" && (value as { ungroupedName: string }).ungroupedName.trim() ? (value as { ungroupedName: string }).ungroupedName.trim().slice(0, 40) : "未分组";
-    const store: InfoStore = { version: 2, ungroupedName, linkGroups: normalizedGroups, sections: normalizedSections, systems: normalizedSystems, resources: normalizedResources };
+    const rawUngroupedOrder = (value as { ungroupedOrder?: unknown }).ungroupedOrder;
+    const ungroupedOrder = typeof rawUngroupedOrder === "number" && Number.isFinite(rawUngroupedOrder) ? Math.max(0, Math.min(normalizedGroups.length, Math.floor(rawUngroupedOrder))) : 0;
+    const store: InfoStore = { version: 2, ungroupedName, ungroupedOrder, linkGroups: normalizedGroups, sections: normalizedSections, systems: normalizedSystems, resources: normalizedResources };
     if (totalFileBytes(store) > TOTAL_FILE_LIMIT) store.resources = store.resources.map((item) => ({ ...item, blocks: item.blocks.filter((block) => block.type !== "file") }));
     return store;
   } catch { return null; }

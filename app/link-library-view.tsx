@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ALL_GROUP, deleteLinkGroup, infoId, moveLink, reorderLinkGroups, safeUrl, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, type InfoStore, type LinkGroup, type SystemItem } from "./information";
+import { ALL_GROUP, deleteLinkGroup, infoId, moveLink, reorderLinkGroups, safeUrl, siteIcon, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, type InfoStore, type LinkGroup, type SystemItem } from "./information";
 import InformationItemMenu from "./information-item-menu";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
@@ -22,6 +22,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   const columnsRef = useRef<HTMLDivElement | null>(null);
 
   const groups = useMemo(() => [...store.linkGroups].sort((a, b) => a.order - b.order), [store.linkGroups]);
+  const columns = useMemo(() => [{ id: UNGROUPED, name: store.ungroupedName, order: store.ungroupedOrder, createdAt: 0 }, ...groups].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt), [groups, store.ungroupedName, store.ungroupedOrder]);
   const editingSystem = store.systems.find((item) => item.id === editingSystemId) ?? null;
 
   // 关闭操作菜单
@@ -42,7 +43,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   function addGroup() {
     const name = draftGroup.trim().slice(0, 40);
     if (!name || store.linkGroups.some((group) => group.name === name)) { onNotice(name ? "分组名称不能重复" : "分组名称不能为空"); return; }
-    setStore((current) => ({ ...current, linkGroups: [...current.linkGroups, { id: infoId(), name, order: current.linkGroups.length, createdAt: Date.now() }] }));
+    setStore((current) => ({ ...current, linkGroups: [...current.linkGroups, { id: infoId(), name, order: Math.max(current.ungroupedOrder, ...current.linkGroups.map((group) => group.order)) + 1, createdAt: Date.now() }] }));
     setDraftGroup("");
   }
 
@@ -67,17 +68,23 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
   }
 
   // 拖拽排序：列内重排 + 跨分组移动
-  function onDropToItem(target: SystemItem) {
-    if (!draggedId || draggedId === target.id) { setDraggedId(null); return; }
-    setStore((current) => moveLink(current, draggedId, target.groupId, target.id) || current);
+  function draggedLink(event: React.DragEvent) {
+    return event.dataTransfer.getData("application/x-workbench-link") || draggedId;
+  }
+
+  function onDropToItem(event: React.DragEvent, target: SystemItem) {
+    const linkId = draggedLink(event);
+    if (!linkId || linkId === target.id) { setDraggedId(null); return; }
+    setStore((current) => moveLink(current, linkId, target.groupId, target.id) || current);
     setDraggedId(null);
   }
 
   // 拖到分组标签上 = 移动到该分组
-  function onDropToGroup(groupId: string) {
-    if (!draggedId) return;
+  function onDropToGroup(event: React.DragEvent, groupId: string) {
+    const linkId = draggedLink(event);
+    if (!linkId) return;
     if (groupId === ALL_GROUP) { setDraggedId(null); return; }
-    setStore((current) => moveLink(current, draggedId, groupId) || current);
+    setStore((current) => moveLink(current, linkId, groupId) || current);
     setDraggedId(null);
   }
 
@@ -90,14 +97,14 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
 
     <div className="board-scroll-controls" aria-label="浏览链接分组"><button type="button" onClick={() => columnsRef.current?.scrollBy({ left: -320, behavior: "smooth" })} aria-label="向左查看分组">‹</button><button type="button" onClick={() => columnsRef.current?.scrollBy({ left: 320, behavior: "smooth" })} aria-label="向右查看分组">›</button></div>
     <div className="link-columns" ref={columnsRef}>
-      {[{ id: UNGROUPED, name: store.ungroupedName, order: -1, createdAt: 0 }, ...groups].map((group) => {
+      {columns.map((group) => {
         const items = visibleLinks(store, group.id, query, "manual");
-        return <section key={group.id || "ungrouped"} className={`link-column board-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""} ${systemMenu && items.some((item) => item.id === systemMenu.id) ? " menu-open" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId && group.id) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(group.id); setDraggedGroupId(null); setDropGroupId(null); }}>
-          <header className="link-column-header board-column-header" draggable={Boolean(group.id)} onDragStart={(event) => { event.stopPropagation(); setDraggedId(null); setDraggedGroupId(group.id); }} onDragEnd={() => { setDraggedGroupId(null); setDropGroupId(null); }}><div><span className="drag-grip" aria-hidden>⠿</span><h2>{group.name}</h2><small>{items.length}</small></div><button type="button" onClick={() => { setActiveGroup(group.id); setNewSystem(true); }} aria-label={`在${group.name}新增链接`}>＋</button></header>
+        return <section key={group.id || "ungrouped"} className={`link-column board-column ${dropGroupId === group.id ? " drop-target" : ""} ${draggedGroupId === group.id ? " dragging" : ""} ${systemMenu && items.some((item) => item.id === systemMenu.id) ? " menu-open" : ""}`} onDragOver={(event) => { event.preventDefault(); setDropGroupId(group.id); }} onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)} onDrop={(event) => { event.preventDefault(); if (draggedGroupId !== null) setStore((current) => reorderLinkGroups(current, draggedGroupId, group.id, event.clientX > event.currentTarget.getBoundingClientRect().left + event.currentTarget.clientWidth / 2 ? "after" : "before") || current); else onDropToGroup(event, group.id); setDraggedGroupId(null); setDropGroupId(null); }}>
+          <header className="link-column-header board-column-header" draggable onDragStart={(event) => { event.stopPropagation(); setDraggedId(null); setDraggedGroupId(group.id); }} onDragEnd={() => { setDraggedGroupId(null); setDropGroupId(null); }}><div><span className="drag-grip" aria-hidden>⠿</span><h2>{group.name}</h2><small>{items.length}</small></div><button type="button" onClick={() => { setActiveGroup(group.id); setNewSystem(true); }} aria-label={`在${group.name}新增链接`}>＋</button></header>
           <div className="link-column-body board-column-body">
         {items.map((item) => {
           const target = item.links.find((link) => link.id === item.defaultLinkId) || item.links[0];
-          return <article className={`system-row${draggedId === item.id ? " dragging" : ""}`} key={item.id} draggable onDragStart={() => { setDraggedGroupId(null); setDraggedId(item.id); }} onDragEnd={() => { setDraggedId(null); setDropGroupId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); onDropToItem(item); }}>
+          return <article className={`system-row${draggedId === item.id ? " dragging" : ""}`} key={item.id} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-workbench-link", item.id); setDraggedGroupId(null); setDraggedId(item.id); }} onDragEnd={() => { setDraggedId(null); setDropGroupId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); onDropToItem(event, item); }}>
             <span className="drag-grip" aria-hidden>⠿</span>
             <button className="system-open" onClick={() => openLink(item)} title={item.name}>
               <b><i aria-hidden>{item.name.slice(0, 1).toUpperCase()}</i>{/^https?:\/\//.test(item.icon) && <img src={item.icon} alt="" onError={(event) => { const fallback = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(target.url).hostname)}&sz=64`; if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback; else event.currentTarget.style.display = "none"; }} />}</b>
@@ -119,7 +126,8 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
       const duplicate = store.systems.some((system) => system.links.some((link) => link.url === meta.url));
       if (duplicate && !window.confirm("这个网址可能已经保存，仍要继续吗？")) return;
       const now = Date.now(), linkId = infoId();
-      setStore((current) => ({ ...current, systems: [...current.systems, { id: infoId(), sectionId: current.sections[0]?.id || "", groupId: activeGroup === ALL_GROUP ? UNGROUPED : activeGroup, name: name.trim() || remote?.title || meta.name, icon: remote?.icon || meta.icon, links: [{ id: linkId, url: remote?.finalUrl || meta.url, label: "主页" }], defaultLinkId: linkId, order: current.systems.length, lastOpenedAt: 0, createdAt: now, updatedAt: now }] }));
+      const finalUrl = remote?.finalUrl || meta.url;
+      setStore((current) => ({ ...current, systems: [...current.systems, { id: infoId(), sectionId: current.sections[0]?.id || "", groupId: activeGroup === ALL_GROUP ? UNGROUPED : activeGroup, name: name.trim() || remote?.title || meta.name, icon: siteIcon(finalUrl, remote?.icon), links: [{ id: linkId, url: finalUrl, label: "主页" }], defaultLinkId: linkId, order: current.systems.length, lastOpenedAt: 0, createdAt: now, updatedAt: now }] }));
       setNewSystem(false); onNotice("链接已添加");
     }} />}
     {editingSystem && <SystemEditDialog item={editingSystem} onClose={() => setEditingSystemId(null)} onSave={(name, url) => {

@@ -5,11 +5,11 @@ import { deleteResourceSection, htmlText, infoId, moveResource, reorderResourceS
 import InformationEditor from "./information-editor";
 import InformationItemMenu from "./information-item-menu";
 
-type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
+type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void; initialEditingId?: string | null; onEditingChange?: (id: string | null) => void };
 
-export default function ResourceBoardView({ store, setStore, storageError, onNotice }: Props) {
+export default function ResourceBoardView({ store, setStore, storageError, onNotice, initialEditingId = null, onEditingChange }: Props) {
   const [query, setQuery] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialEditingId);
   const [manageOpen, setManageOpen] = useState(false);
   const [draftSection, setDraftSection] = useState("");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
@@ -31,12 +31,13 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   const editing = store.resources.find((item) => item.id === editingId) ?? null;
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+  useEffect(() => setEditingId(initialEditingId), [initialEditingId]);
 
   // 全局搜索时退化为统一列表视图
   const searching = query.trim().length > 0;
   const searchResults = useMemo(() => searching ? visibleResources(store, "all", query, "manual") : [], [store, query, searching]);
 
-  function openEditor(id: string) { previousScroll.current = window.scrollY; setEditingId(id); }
+  function openEditor(id: string) { previousScroll.current = window.scrollY; setEditingId(id); onEditingChange?.(id); }
   function closeEditor() {
     if (draftId.current) {
       const draft = store.resources.find((item) => item.id === draftId.current);
@@ -44,7 +45,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
       if (!meaningful) setStore((current) => ({ ...current, resources: current.resources.filter((item) => item.id !== draftId.current) }));
       draftId.current = null;
     }
-    setEditingId(null); requestAnimationFrame(() => window.scrollTo({ top: previousScroll.current }));
+    setEditingId(null); onEditingChange?.(null); requestAnimationFrame(() => window.scrollTo({ top: previousScroll.current }));
   }
 
   useEffect(() => {
