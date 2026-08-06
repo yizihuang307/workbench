@@ -25,8 +25,18 @@ interface ExecutionContext {
 // dangerouslyAllowSVG: true in next.config.js and uncomment below:
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
+// Inject Cloudflare Worker env vars into process.env so app code can access them
+function injectEnv(env: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === "string") {
+      process.env[key] = value;
+    }
+  }
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    injectEnv(env as unknown as Record<string, unknown>);
     const url = new URL(request.url);
 
     if (url.pathname === "/_vinext/image") {
