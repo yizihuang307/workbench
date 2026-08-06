@@ -7,7 +7,7 @@ export type RecordStore = { version: 1; categories: RecordCategory[]; records: R
 export const RECORDS_KEY = "workbench.records.v1";
 
 export function recordId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 export function emptyRecordStore(now = Date.now()): RecordStore {

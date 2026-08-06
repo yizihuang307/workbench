@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordsView from "./records-view";
-import { emptyRecordStore, parseRecordStore, recordId, RECORDS_KEY, type RecordStore } from "./records";
+import { emptyRecordStore, recordId, type RecordStore } from "./records";
 import LinkLibraryView from "./link-library-view";
 import ResourceBoardView from "./resource-board-view";
 import { emptyInfoStore, type InfoStore } from "./information";
-import { INFO_SYNC_KEY, loadInfoStore, migrateLegacyInfoStore, saveInfoStore } from "./information-storage";
 import { addCompletion, cleanCompletionHistory, completionsForDay, completionsForWeek, dayStart, removeCompletion, weekStart, type CompletionRecord } from "./completion-history";
 import { createClient } from "@/lib/supabase/client";
+import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -38,22 +38,16 @@ function routeState(pathname: string) {
   return { page, detailId: id || null };
 }
 
-const STORAGE_KEY = "workbench.schedule.v1";
 const GROUPS: Group[] = ["today", "week", "later"];
 const GROUP_NAME: Record<Group, string> = { today: "今日安排", week: "本周安排", later: "后续安排" };
 const initialTasks: Tasks = {
-  today: [
-    makeTask("整理周会要点", { done: true }),
-    makeTask("确认新版工作台的信息架构", { legacy: true, priority: true }),
-    makeTask("回复设计评审意见", { priority: true }),
-    makeTask("准备明天的访谈提纲"),
-  ],
-  week: [makeTask("完成首页低保真原型"), makeTask("梳理用户反馈清单")],
-  later: [makeTask("整理个人常用工具入口"), makeTask("补充会议纪要模板")],
+  today: [],
+  week: [],
+  later: [],
 };
 
 function id() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 function makeTask(label: string, patch: Partial<Task> = {}): Task {
@@ -67,46 +61,6 @@ function localDate() {
 
 function emptyStore(): Store {
   return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [], completionHistory: [] };
-}
-
-function cleanTask(value: unknown): Task | null {
-  if (!value || typeof value !== "object") return null;
-  const item = value as Partial<Task>;
-  if (typeof item.label !== "string" || !item.label.trim()) return null;
-  return {
-    id: typeof item.id === "string" ? item.id : id(),
-    label: item.label.trim().slice(0, 200),
-    done: Boolean(item.done),
-    priority: Boolean(item.priority),
-    legacy: Boolean(item.legacy) && !item.done,
-    createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
-  };
-}
-
-function parseStore(raw: string): Store | null {
-  try {
-    const value = JSON.parse(raw) as Partial<Store>;
-    if (!value.tasks || typeof value.tasks !== "object") return null;
-    const tasks = Object.fromEntries(GROUPS.map((group) => [group, Array.isArray(value.tasks?.[group])
-      ? value.tasks[group].map(cleanTask).filter(Boolean) as Task[] : []])) as Tasks;
-    tasks.week = tasks.week.map((task) => ({ ...task, priority: false, legacy: false }));
-    tasks.later = tasks.later.map((task) => ({ ...task, priority: false, legacy: false }));
-    const today = localDate();
-    if (value.savedDate && value.savedDate !== today) {
-      tasks.today = tasks.today.map((task) => ({ ...task, legacy: !task.done || task.legacy }));
-    }
-    return {
-      version: 1,
-      savedDate: today,
-      tasks,
-      hideDone: Boolean(value.hideDone),
-      mood: Number.isInteger(value.mood) ? Math.max(0, Math.min(4, Number(value.mood))) : 2,
-      quickNotes: Array.isArray(value.quickNotes) ? value.quickNotes.filter((note) => note && typeof note.text === "string").map((note) => ({ id: typeof note.id === "string" ? note.id : id(), text: note.text.slice(0, 2000), createdAt: typeof note.createdAt === "number" ? note.createdAt : Date.now() })).slice(-100) : [],
-      completionHistory: cleanCompletionHistory(value.completionHistory),
-    };
-  } catch {
-    return null;
-  }
 }
 
 export default function Home() {
@@ -127,8 +81,9 @@ export default function Home() {
   const [dragged, setDragged] = useState<{ group: Group; id: string } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suppressInfoSave = useRef(false);
-  const infoStoreRef = useRef(infoStore);
+  const cloudLoaded = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
   const expandButtons = useRef<Partial<Record<Group, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
@@ -143,103 +98,59 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? parseStore(raw) : null;
-    const recordRaw = window.localStorage.getItem(RECORDS_KEY);
-    const parsedRecords = recordRaw ? parseRecordStore(recordRaw) : null;
     void (async () => {
-      let parsedInfo: InfoStore | null = null;
-      try { parsedInfo = await migrateLegacyInfoStore(); }
-      catch { setNotice("信息数据无法读取，已保留安全的空资料库"); }
-      if (parsed) setStore(parsed);
-      else if (raw) {
-        setStore({ ...emptyStore(), tasks: { today: [], week: [], later: [] } });
-        setNotice("本地数据无法读取，已安全恢复为空状态");
+      try {
+        const cloud = await loadWorkbenchState<Store, RecordStore, InfoStore>();
+        setStore({ ...cloud.schedule, completionHistory: cleanCompletionHistory(cloud.schedule.completionHistory) });
+        setRecordStore(cloud.records);
+        setInfoStore(cloud.information);
+        cloudLoaded.current = true;
+      } catch (error) {
+        setRecordStorageError(true);
+        setInfoStorageError(true);
+        setNotice(error instanceof Error ? error.message : "云端数据加载失败，请刷新重试");
+      } finally {
+        setReady(true);
       }
-      if (parsedRecords) setRecordStore(parsedRecords);
-      else if (recordRaw) setNotice("记录数据无法读取，已保留安全的空记录库");
-      if (parsedInfo) { suppressInfoSave.current = true; infoStoreRef.current = parsedInfo; setInfoStore(parsedInfo); }
-      setReady(true);
     })();
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...store, savedDate: localDate() }));
-    } catch {
-      queueMicrotask(() => setNotice("保存失败，请清理浏览器空间后重试"));
-    }
-  }, [ready, store]);
-
-  useEffect(() => {
-    if (!ready) return;
-    try { window.localStorage.setItem(RECORDS_KEY, JSON.stringify(recordStore)); queueMicrotask(() => setRecordStorageError(false)); }
-    catch { queueMicrotask(() => { setRecordStorageError(true); setNotice("记录保存失败，请清理浏览器空间后重试"); }); }
-  }, [ready, recordStore]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (suppressInfoSave.current) { suppressInfoSave.current = false; return; }
-    let active = true;
-    void saveInfoStore(infoStore).then(() => {
-      if (!active) return;
-      setInfoStorageError(false);
-      window.localStorage.setItem(INFO_SYNC_KEY, String(Date.now()));
-    }).catch(() => { if (active) { setInfoStorageError(true); setNotice("信息保存失败，请清理浏览器空间后重试"); } });
-    return () => { active = false; };
-  }, [ready, infoStore]);
-
-  useEffect(() => { infoStoreRef.current = infoStore; }, [infoStore]);
-
-  useEffect(() => {
-    function sync(event: StorageEvent) {
-      if (event.key !== STORAGE_KEY || !event.newValue) return;
-      const parsed = parseStore(event.newValue);
-      if (parsed) {
-        setStore(parsed);
-        setNotice("已同步另一标签页的修改");
-      }
-    }
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, []);
-
-  useEffect(() => {
-    function syncRecords(event: StorageEvent) {
-      if (event.key !== RECORDS_KEY || !event.newValue) return;
-      const parsed = parseRecordStore(event.newValue);
-      if (!parsed) return;
-      if (activePage === "records" && document.hasFocus()) {
-        setNotice("另一标签页修改了记录，请先刷新确认，避免覆盖当前编辑");
-        return;
-      }
-      setRecordStore(parsed);
-      setNotice("已同步另一标签页的记录修改");
-    }
-    window.addEventListener("storage", syncRecords);
-    return () => window.removeEventListener("storage", syncRecords);
-  }, [activePage]);
-
-  useEffect(() => {
-    function syncInfo(event: StorageEvent) {
-      if (event.key !== INFO_SYNC_KEY || !event.newValue) return;
-      void loadInfoStore().then((parsed) => {
-        if (!parsed || JSON.stringify(parsed) === JSON.stringify(infoStoreRef.current)) return;
-        suppressInfoSave.current = true;
-        infoStoreRef.current = parsed;
-        setInfoStore(parsed);
-      });
-    }
-    window.addEventListener("storage", syncInfo); return () => window.removeEventListener("storage", syncInfo);
-  }, []);
+    if (!ready || !cloudLoaded.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const snapshot = {
+      schedule: { ...store, savedDate: localDate() },
+      records: recordStore,
+      information: infoStore,
+    };
+    saveTimer.current = setTimeout(() => {
+      saveChain.current = saveChain.current
+        .catch(() => undefined)
+        .then(() => saveWorkbenchState(snapshot))
+        .then(() => {
+          setRecordStorageError(false);
+          setInfoStorageError(false);
+        })
+        .catch((error) => {
+          setRecordStorageError(true);
+          setInfoStorageError(true);
+          setNotice(error instanceof Error ? error.message : "云端保存失败，请稍后重试");
+        });
+    }, 600);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [ready, store, recordStore, infoStore]);
 
   useEffect(() => {
     document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen || historyOpen));
     return () => document.body.classList.remove("modal-open");
   }, [expanded, quickOpen, historyOpen]);
 
-  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+  useEffect(() => () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, []);
 
   useEffect(() => {
     if (!notice) return;

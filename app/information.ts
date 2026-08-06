@@ -23,7 +23,7 @@ export const DOCUMENT_LIMIT = 30000;
 export const FILE_LIMIT = 20 * 1024 * 1024;
 export const TOTAL_FILE_LIMIT = 200 * 1024 * 1024;
 
-export function infoId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`; }
+export function infoId() { return crypto.randomUUID(); }
 
 export function emptyInfoStore(now = Date.now()): InfoStore {
   return { version: 2, ungroupedName: "未分组", ungroupedOrder: 0, linkGroups: [], sections: [
