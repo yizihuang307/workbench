@@ -8,15 +8,16 @@ import { v4 as uuid } from "uuid";
 const TOKEN_TTL_MS = 5000;
 const tokenStore = new Map<string, { entity: string; id: string; expiresAt: number }>();
 
-// 定时清理过期 token
-setInterval(() => {
+// 懒清理过期 token（Cloudflare Workers 不允许模块级 setInterval）
+function cleanupExpiredTokens() {
   const now = Date.now();
   for (const [key, value] of tokenStore) {
     if (value.expiresAt < now) tokenStore.delete(key);
   }
-}, 10000);
+}
 
 export async function POST(request: Request) {
+  cleanupExpiredTokens();
   const requestId = uuid();
   const userId = await getUserId();
 
