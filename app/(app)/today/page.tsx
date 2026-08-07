@@ -33,7 +33,7 @@ type Deleted = { task: Task; group: Group };
 export default function TodayPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ready, setReady] = useState(false);
-  const [hideDone, setHideDone] = useState(false);
+  const [hideDone, setHideDone] = useState(true);
   const [notice, setNotice] = useState("");
   const [deleted, setDeleted] = useState<Deleted | null>(null);
   const [expanded, setExpanded] = useState<Group | null>(null);
@@ -45,10 +45,19 @@ export default function TodayPage() {
   // 加载数据
   const loadTasks = useCallback(async () => {
     try {
-      const res = await fetch("/api/tasks");
-      if (!res.ok) throw new Error("加载失败");
-      const json = await res.json();
-      setTasks(json.data ?? []);
+      const [tasksRes, prefsRes] = await Promise.all([
+        fetch("/api/tasks"),
+        fetch("/api/preferences").catch(() => null),
+      ]);
+      if (!tasksRes.ok) throw new Error("加载失败");
+      const tasksJson = await tasksRes.json();
+      setTasks(tasksJson.data ?? []);
+      if (prefsRes?.ok) {
+        const prefsJson = await prefsRes.json();
+        if (prefsJson.data && typeof prefsJson.data.hide_completed === "boolean") {
+          setHideDone(prefsJson.data.hide_completed);
+        }
+      }
     } catch {
       setNotice("加载数据失败");
     } finally {
@@ -391,6 +400,15 @@ function TaskArea({
   const complete = tasks.filter((t) => t.is_completed).length;
   const [dragged, setDragged] = useState<{ group: Group; id: string } | null>(null);
 
+  function saveHideDone(next: boolean) {
+    setHideDone(next);
+    fetch("/api/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hideCompleted: next }),
+    }).catch(() => {});
+  }
+
   return (
     <section
       className={`task-area area-${group} ${featured ? "featured" : ""} ${expanded ? "expanded" : ""}`}
@@ -442,7 +460,7 @@ function TaskArea({
           <span>{complete} / {tasks.length} 已完成</span>
           <i><b style={{ width: `${tasks.length ? (complete / tasks.length) * 100 : 0}%` }} /></i>
           <label>
-            <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />
+            <input type="checkbox" checked={hideDone} onChange={(e) => saveHideDone(e.target.checked)} />
             隐藏已完成
           </label>
         </footer>

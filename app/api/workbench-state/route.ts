@@ -101,6 +101,66 @@ const stateSchema = z.object({
 type Supabase = ReturnType<typeof createAdminClient>;
 const SORT_GAP = 1_000_000;
 
+function toBeijingDate(utcIso: string): string {
+  const d = new Date(utcIso);
+  d.setUTCHours(d.getUTCHours() + 8);
+  return d.toISOString().slice(0, 10);
+}
+
+function beijingToday(): string {
+  return toBeijingDate(new Date().toISOString());
+}
+
+function beijingThisMonday(): string {
+  const today = new Date();
+  today.setUTCHours(today.getUTCHours() + 8);
+  const day = today.getUTCDay();
+  const offset = (day + 6) % 7;
+  today.setUTCDate(today.getUTCDate() - offset);
+  return today.toISOString().slice(0, 10);
+}
+
+/**
+ * 每日/每周 rollover：
+ *  - area=today 未完成：created_at（北京时间）早于今天 → is_legacy=true
+ *  - area=week  未完成：created_at（北京时间）早于本周一 → is_legacy=true
+ */
+async function rolloverLegacyTasks(supabase: Supabase, userId: string) {
+  const { data: rows, error } = await supabase
+    .from("tasks")
+    .select("id,area,is_completed,is_legacy,created_at,version")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .eq("is_completed", false)
+    .in("area", ["today", "week"]);
+  if (error || !rows) return;
+
+  const today = beijingToday();
+  const thisMonday = beijingThisMonday();
+  const updates: Array<{ id: string; is_legacy: boolean; version: number }> = [];
+
+  for (const r of rows) {
+    const createdBJ = toBeijingDate(String(r.created_at));
+    let shouldLegacy = false;
+    if (r.area === "today" && createdBJ < today) shouldLegacy = true;
+    if (r.area === "week" && createdBJ < thisMonday) shouldLegacy = true;
+    if (shouldLegacy && !r.is_legacy) {
+      updates.push({ id: r.id, is_legacy: true, version: Number(r.version ?? 0) + 1 });
+    }
+  }
+
+  if (!updates.length) return;
+  await Promise.all(
+    updates.map((u) =>
+      supabase
+        .from("tasks")
+        .update({ is_legacy: u.is_legacy, version: u.version })
+        .eq("id", u.id)
+        .eq("user_id", userId),
+    ),
+  );
+}
+
 function requestError(message: string, requestId: string) {
   return new AppError("VALIDATION_ERROR", message).toResponse(requestId);
 }
@@ -160,7 +220,7 @@ async function ensureDefaults(supabase: Supabase, userId: string) {
   }
 
   const { error } = await supabase.from("user_preferences").upsert(
-    { user_id: userId },
+    { user_id: userId, hide_completed: true },
     { onConflict: "user_id", ignoreDuplicates: true },
   );
   if (error) throw error;
@@ -168,6 +228,11 @@ async function ensureDefaults(supabase: Supabase, userId: string) {
 
 async function readState(supabase: Supabase, userId: string) {
   await ensureDefaults(supabase, userId);
+  try {
+    await rolloverLegacyTasks(supabase, userId);
+  } catch {
+    // rollover 失败不阻塞正常读取
+  }
   const [
     tasksResult,
     recordCategoriesResult,
@@ -237,7 +302,7 @@ async function readState(supabase: Supabase, userId: string) {
       version: 1,
       savedDate: new Date().toISOString().slice(0, 10),
       tasks: taskGroups,
-      hideDone: Boolean(preferences?.hide_completed),
+      hideDone: preferences?.hide_completed ?? true,
       mood: 2,
       quickNotes: [],
       completionHistory,

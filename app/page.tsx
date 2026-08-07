@@ -60,7 +60,7 @@ function localDate() {
 }
 
 function emptyStore(): Store {
-  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [], completionHistory: [] };
+  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: true, mood: 2, quickNotes: [], completionHistory: [] };
 }
 
 export default function Home() {
