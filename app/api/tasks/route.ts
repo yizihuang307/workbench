@@ -2,28 +2,10 @@ import { getUserId } from "@/lib/auth";
 import { createTaskSchema } from "@/lib/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AppError } from "@/lib/errors";
+import { isTaskVisibleInSchedule, shouldMarkLegacy } from "@/lib/task-period";
 import { v4 as uuid } from "uuid";
 
 type SupabaseClient = ReturnType<typeof createAdminClient>;
-
-function toBeijingDate(utcIso: string): string {
-  const d = new Date(utcIso);
-  d.setUTCHours(d.getUTCHours() + 8);
-  return d.toISOString().slice(0, 10);
-}
-
-function beijingToday(): string {
-  return toBeijingDate(new Date().toISOString());
-}
-
-function beijingThisMonday(): string {
-  const today = new Date();
-  today.setUTCHours(today.getUTCHours() + 8);
-  const day = today.getUTCDay();
-  const offset = (day + 6) % 7;
-  today.setUTCDate(today.getUTCDate() - offset);
-  return today.toISOString().slice(0, 10);
-}
 
 /**
  * 每日/每周 rollover：
@@ -33,23 +15,24 @@ function beijingThisMonday(): string {
 async function rolloverLegacyTasks(supabase: SupabaseClient, userId: string) {
   const { data: rows, error } = await supabase
     .from("tasks")
-    .select("id,area,is_completed,is_legacy,created_at")
+    .select("id,area,is_completed,is_legacy,created_at,version")
     .eq("user_id", userId)
     .is("deleted_at", null)
     .eq("is_completed", false)
     .in("area", ["today", "week"]);
   if (error || !rows) return;
 
-  const today = beijingToday();
-  const thisMonday = beijingThisMonday();
   const updates: Array<{ id: string; is_legacy: boolean; version: number }> = [];
 
   for (const r of rows) {
-    const createdBJ = toBeijingDate(String(r.created_at));
-    let shouldLegacy = false;
-    if (r.area === "today" && createdBJ < today) shouldLegacy = true;
-    if (r.area === "week" && createdBJ < thisMonday) shouldLegacy = true;
-    if (shouldLegacy && !r.is_legacy) updates.push({ id: r.id, is_legacy: true, version: Number(r.version) + 1 });
+    const shouldLegacy = shouldMarkLegacy({
+      area: r.area,
+      isCompleted: r.is_completed,
+      createdAt: r.created_at,
+    });
+    if (shouldLegacy !== r.is_legacy) {
+      updates.push({ id: r.id, is_legacy: shouldLegacy, version: Number(r.version ?? 0) + 1 });
+    }
   }
 
   if (!updates.length) return;
@@ -93,7 +76,14 @@ export async function GET(request: Request) {
   const { data, error } = await query;
   if (error) return new AppError("INTERNAL_ERROR", error.message).toResponse(requestId);
 
-  return Response.json({ data, requestId });
+  const visible = (data ?? []).filter((task) => isTaskVisibleInSchedule({
+    area: task.area,
+    isCompleted: task.is_completed,
+    createdAt: task.created_at,
+    completedAt: task.completed_at,
+  }));
+
+  return Response.json({ data: visible, requestId });
 }
 
 // POST /api/tasks

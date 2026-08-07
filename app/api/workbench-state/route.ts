@@ -1,6 +1,7 @@
 import { getUserId } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { shouldMarkLegacy } from "@/lib/task-period";
 import { z } from "zod";
 import { v4 as uuid } from "uuid";
 
@@ -13,6 +14,7 @@ const taskSchema = z.object({
   priority: z.boolean(),
   legacy: z.boolean(),
   createdAt: timestamp,
+  completedAt: timestamp.nullable().optional(),
 });
 const completionSchema = z.object({
   taskId: id,
@@ -101,25 +103,6 @@ const stateSchema = z.object({
 type Supabase = ReturnType<typeof createAdminClient>;
 const SORT_GAP = 1_000_000;
 
-function toBeijingDate(utcIso: string): string {
-  const d = new Date(utcIso);
-  d.setUTCHours(d.getUTCHours() + 8);
-  return d.toISOString().slice(0, 10);
-}
-
-function beijingToday(): string {
-  return toBeijingDate(new Date().toISOString());
-}
-
-function beijingThisMonday(): string {
-  const today = new Date();
-  today.setUTCHours(today.getUTCHours() + 8);
-  const day = today.getUTCDay();
-  const offset = (day + 6) % 7;
-  today.setUTCDate(today.getUTCDate() - offset);
-  return today.toISOString().slice(0, 10);
-}
-
 /**
  * 每日/每周 rollover：
  *  - area=today 未完成：created_at（北京时间）早于今天 → is_legacy=true
@@ -135,17 +118,16 @@ async function rolloverLegacyTasks(supabase: Supabase, userId: string) {
     .in("area", ["today", "week"]);
   if (error || !rows) return;
 
-  const today = beijingToday();
-  const thisMonday = beijingThisMonday();
   const updates: Array<{ id: string; is_legacy: boolean; version: number }> = [];
 
   for (const r of rows) {
-    const createdBJ = toBeijingDate(String(r.created_at));
-    let shouldLegacy = false;
-    if (r.area === "today" && createdBJ < today) shouldLegacy = true;
-    if (r.area === "week" && createdBJ < thisMonday) shouldLegacy = true;
-    if (shouldLegacy && !r.is_legacy) {
-      updates.push({ id: r.id, is_legacy: true, version: Number(r.version ?? 0) + 1 });
+    const shouldLegacy = shouldMarkLegacy({
+      area: r.area,
+      isCompleted: r.is_completed,
+      createdAt: r.created_at,
+    });
+    if (shouldLegacy !== r.is_legacy) {
+      updates.push({ id: r.id, is_legacy: shouldLegacy, version: Number(r.version ?? 0) + 1 });
     }
   }
 
@@ -220,10 +202,16 @@ async function ensureDefaults(supabase: Supabase, userId: string) {
   }
 
   const { error } = await supabase.from("user_preferences").upsert(
-    { user_id: userId, hide_completed: true },
+    { user_id: userId, hide_completed: false, schema_version: 2 },
     { onConflict: "user_id", ignoreDuplicates: true },
   );
   if (error) throw error;
+  const { error: migrationError } = await supabase
+    .from("user_preferences")
+    .update({ hide_completed: false, schema_version: 2 })
+    .eq("user_id", userId)
+    .lt("schema_version", 2);
+  if (migrationError) throw migrationError;
 }
 
 async function readState(supabase: Supabase, userId: string) {
@@ -275,6 +263,7 @@ async function readState(supabase: Supabase, userId: string) {
       priority: row.is_p0,
       legacy: row.is_legacy,
       createdAt: new Date(row.created_at).getTime(),
+      completedAt: row.completed_at ? new Date(row.completed_at).getTime() : null,
     };
     taskGroups[area].push(task);
     if (row.is_completed && row.completed_at) {
@@ -302,7 +291,7 @@ async function readState(supabase: Supabase, userId: string) {
       version: 1,
       savedDate: new Date().toISOString().slice(0, 10),
       tasks: taskGroups,
-      hideDone: preferences?.hide_completed ?? true,
+      hideDone: preferences?.hide_completed ?? false,
       mood: 2,
       quickNotes: [],
       completionHistory,
@@ -490,7 +479,9 @@ async function writeState(
     is_p0: item.priority,
     is_legacy: item.legacy,
     sort_key: String(item.index * SORT_GAP),
-    completed_at: item.done ? new Date(completionTimes.get(item.id) ?? Date.now()).toISOString() : null,
+    completed_at: item.done
+      ? new Date(item.completedAt ?? completionTimes.get(item.id) ?? Date.now()).toISOString()
+      : null,
     version: 1,
     created_at: new Date(item.createdAt).toISOString(),
     deleted_at: null,
@@ -562,7 +553,7 @@ async function writeState(
     user_id: userId,
     quick_record_category_id: state.records.defaultCategoryId,
     hide_completed: state.schedule.hideDone,
-    schema_version: 1,
+    schema_version: 2,
   }, { onConflict: "user_id" });
   if (preferenceError) throw preferenceError;
 }

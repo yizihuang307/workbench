@@ -9,6 +9,7 @@ import { emptyInfoStore, type InfoStore } from "./information";
 import { addCompletion, cleanCompletionHistory, completionsForDay, completionsForWeek, dayStart, removeCompletion, weekStart, type CompletionRecord } from "./completion-history";
 import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
+import { isTaskVisibleInSchedule } from "@/lib/task-period";
 
 type Group = "today" | "week" | "later";
 type Task = {
@@ -18,6 +19,7 @@ type Task = {
   priority: boolean;
   legacy: boolean;
   createdAt: number;
+  completedAt: number | null;
 };
 type Tasks = Record<Group, Task[]>;
 type Store = {
@@ -51,7 +53,7 @@ function id() {
 }
 
 function makeTask(label: string, patch: Partial<Task> = {}): Task {
-  return { id: id(), label, done: false, priority: false, legacy: false, createdAt: Date.now(), ...patch };
+  return { id: id(), label, done: false, priority: false, legacy: false, createdAt: Date.now(), completedAt: null, ...patch };
 }
 
 function localDate() {
@@ -60,7 +62,7 @@ function localDate() {
 }
 
 function emptyStore(): Store {
-  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: true, mood: 2, quickNotes: [], completionHistory: [] };
+  return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [], completionHistory: [] };
 }
 
 export default function Home() {
@@ -178,7 +180,7 @@ export default function Home() {
       return {
         ...current,
         savedDate: localDate(),
-        tasks: { ...current.tasks, [group]: current.tasks[group].map((item) => item.id === taskId ? { ...item, done: completing, legacy: completing ? false : item.legacy } : item) },
+        tasks: { ...current.tasks, [group]: current.tasks[group].map((item) => item.id === taskId ? { ...item, done: completing, completedAt: completing ? Date.now() : null, legacy: completing ? false : item.legacy } : item) },
         completionHistory: completing
           ? addCompletion(current.completionHistory, { taskId, label: task.label, source: group, completedAt: Date.now() })
           : removeCompletion(current.completionHistory, taskId),
@@ -388,19 +390,25 @@ type AreaActions = {
 function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured = false, expanded = false, ...actions }: AreaActions & {
   group: Group; tasks: Task[]; onExpand: () => void; onOpenHistory?: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
 }) {
-  const shown = useMemo(() => actions.hideDone ? tasks.filter((task) => !task.done) : tasks, [actions.hideDone, tasks]);
-  const complete = tasks.filter((task) => task.done).length;
+  const activeTasks = useMemo(() => tasks.filter((task) => isTaskVisibleInSchedule({
+    area: group,
+    isCompleted: task.done,
+    createdAt: task.createdAt,
+    completedAt: task.completedAt,
+  })), [group, tasks]);
+  const shown = useMemo(() => actions.hideDone ? activeTasks.filter((task) => !task.done) : activeTasks, [actions.hideDone, activeTasks]);
+  const complete = activeTasks.filter((task) => task.done).length;
   return <section className={`task-area area-${group} ${featured ? "featured" : ""} ${expanded ? "expanded" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
-    <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {tasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
+    <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
       {!expanded && <div className="area-header-actions">{group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}<button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button></div>}
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
     <div className="task-list" aria-label={GROUP_NAME[group]}>
       {shown.map((task) => <TaskRow key={task.id} task={task} group={group} {...actions} />)}
-      {!shown.length && <div className="empty"><b>✓</b><span>{actions.hideDone && tasks.length ? "完成项已隐藏" : "这里还没有安排"}</span></div>}
+      {!shown.length && <div className="empty"><b>✓</b><span>{actions.hideDone && activeTasks.length ? "完成项已隐藏" : "这里还没有安排"}</span></div>}
     </div>
-    {featured && <footer className="progress"><span>{complete} / {tasks.length} 已完成</span><i><b style={{ width: `${tasks.length ? complete / tasks.length * 100 : 0}%` }} /></i><label><input type="checkbox" checked={actions.hideDone} onChange={(event) => actions.setHideDone(event.target.checked)} /> 隐藏已完成</label></footer>}
+    {featured && <footer className="progress"><span>{complete} / {activeTasks.length} 已完成</span><i><b style={{ width: `${activeTasks.length ? complete / activeTasks.length * 100 : 0}%` }} /></i><label><input type="checkbox" checked={actions.hideDone} onChange={(event) => actions.setHideDone(event.target.checked)} /> 隐藏已完成</label></footer>}
   </section>;
 }
 
@@ -441,7 +449,7 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
     <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
     <div className="task-copy">
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
-        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.legacy && <em>昨日遗留</em>}</div>}
+        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.legacy && <em>{group === "week" ? "上周遗留" : "昨日遗留"}</em>}</div>}
     </div>
     {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
     <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>···</button>

@@ -33,7 +33,7 @@ type Deleted = { task: Task; group: Group };
 export default function TodayPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ready, setReady] = useState(false);
-  const [hideDone, setHideDone] = useState(true);
+  const [hideDone, setHideDone] = useState(false);
   const [notice, setNotice] = useState("");
   const [deleted, setDeleted] = useState<Deleted | null>(null);
   const [expanded, setExpanded] = useState<Group | null>(null);
@@ -584,7 +584,7 @@ function TaskRow({
           <div className="task-copy-line">
             <span onDoubleClick={() => setEditing(true)}>{task.title}</span>
             {task.is_p0 && <em className="priority-tag">P0</em>}
-            {task.is_legacy && <em>昨日遗留</em>}
+            {task.is_legacy && <em>{group === "week" ? "上周遗留" : "昨日遗留"}</em>}
           </div>
         )}
       </div>
