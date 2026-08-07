@@ -93,6 +93,8 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run install:ci`: perform the one bounded lockfile install
 - `npm run dev`: start the Vite/Vinext development server
 - `npm run build`: build and validate the deployable Sites artifact
+- `npm run pages:build`: package the Vinext Worker for Cloudflare Pages advanced mode
+- `npm run pages:preview`: build and preview the Pages artifact locally
 - `npm run start`: start the built Vinext application
 - `npm test`: build, validate, and verify the rendered development-preview metadata
 - `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
@@ -101,6 +103,23 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
 
 The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
+
+## Cloudflare Pages
+
+This project uses Pages advanced mode so the existing Vinext SSR and API routes
+continue to run behind a `pages.dev` domain.
+
+Configure the Pages project with:
+
+- Build command: `npm run pages:build`
+- Build output directory: `dist/client`
+- Node.js version: `22.13.0` or newer
+- Compatibility date: `2025-01-01`
+- Compatibility flag: `nodejs_compat`
+
+Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as project
+variables. Add `SUPABASE_SERVICE_ROLE_KEY` as an encrypted project secret.
+`OPENROUTER_API_KEY` is optional and only required for AI organization.
 
 ## Learn More
 
