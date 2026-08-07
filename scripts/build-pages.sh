@@ -39,4 +39,14 @@ cp -R "${server_dir}/ssr" "${pages_dir}/ssr"
 # Pages must bundle _worker.js and its SSR modules, so remove that redirect.
 rm -f "${project_root}/.wrangler/deploy/config.json"
 
+# Cloudflare Pages advanced mode needs _routes.json to route static assets
+# directly and send everything else to the worker.
+cat > "${pages_dir}/_routes.json" <<'ROUTES'
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": ["/assets/*", "/favicon.svg", "/file.svg", "/globe.svg", "/og.png", "/window.svg"]
+}
+ROUTES
+
 echo "Prepared Cloudflare Pages artifact in dist/client."
