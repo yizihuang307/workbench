@@ -15,6 +15,7 @@ if [[ ! -x "${vinext}" ]]; then
   exit 69
 fi
 
+mkdir -p "${project_root}/.wrangler/deploy"
 "${vinext}" build
 
 server_dir="${project_root}/dist/server"
