@@ -64,7 +64,7 @@
 .board-columns { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x proximity; }
 .board-scroll-controls { display: flex; justify-content: flex-end; gap: 6px; margin: -5px 0 7px; }
 .board-scroll-controls button { width: 34px; height: 32px; border: 1px solid var(--violet-5); border-radius: 8px; background: white; color: var(--violet-11); font-size: 22px; }
-.board-column { flex: 0 0 304px; display: flex; flex-direction: column; max-height: calc(100vh - 220px); width: 304px; background: var(--violet-3); border-radius: var(--radius-lg); scroll-snap-align: start; overflow: hidden; }
+.board-column { flex: 0 0 304px; display: flex; flex-direction: column; max-height: calc(100vh - 220px); background: var(--violet-3); border-radius: var(--radius-lg); scroll-snap-align: start; overflow: hidden; }
 .board-column.dragging { opacity: .58; outline: 2px dashed var(--violet-8); outline-offset: -2px; }
 .board-column-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 14px 10px; background: var(--violet-3); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 .board-column-header[draggable="true"] { cursor: grab; }
