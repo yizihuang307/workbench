@@ -1,6 +1,6 @@
 name = "workbench"
 main = "worker/index.ts"
-compatibility_date = "2025-01-01"
+compatibility_date = "2025-05-05"
 
 [assets]
 directory = "dist/client"

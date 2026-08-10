@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/immutability */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -274,7 +275,7 @@ export default function RecordsPage() {
 
       {deleted && (
         <div className="undo" role="status">
-          <span>已删除"{deleted.record.title}"</span>
+          <span>已删除“{deleted.record.title}”</span>
           <button onClick={undoDelete}>撤销</button>
         </div>
       )}

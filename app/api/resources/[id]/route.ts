@@ -18,7 +18,7 @@ export async function PATCH(
   if (!parsed.success) {
     return new AppError(
       "VALIDATION_ERROR",
-      parsed.error.errors[0]?.message ?? "参数无效",
+      parsed.error.issues[0]?.message ?? "参数无效",
     ).toResponse(requestId);
   }
 

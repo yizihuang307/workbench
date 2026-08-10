@@ -125,7 +125,14 @@ export async function createLink(
 export async function updateLink(
   userId: string,
   linkId: string,
-  patch: Partial<Pick<Link, "group_id" | "url" | "normalized_url" | "name" | "favicon_url" | "sort_key">>,
+  patch: Partial<{
+    group_id: string;
+    url: string;
+    normalized_url: string;
+    name: string;
+    favicon_url: string | null;
+    sort_key: string;
+  }>,
   version: number,
 ) {
   const supabase = await createClient();

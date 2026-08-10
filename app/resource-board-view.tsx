@@ -31,6 +31,8 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
   const editing = store.resources.find((item) => item.id === editingId) ?? null;
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+  // 外部路由变化需要同步当前编辑项。
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setEditingId(initialEditingId), [initialEditingId]);
 
   // 全局搜索时退化为统一列表视图

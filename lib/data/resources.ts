@@ -126,7 +126,15 @@ export async function createResource(
 export async function updateResource(
   userId: string,
   resourceId: string,
-  patch: Partial<Pick<ResourceItem, "category_id" | "title" | "title_mode" | "document_json" | "plain_text" | "is_pinned" | "sort_key">>,
+  patch: Partial<{
+    category_id: string;
+    title: string;
+    title_mode: "auto" | "manual";
+    document_json: string;
+    plain_text: string;
+    is_pinned: boolean;
+    sort_key: string;
+  }>,
   version: number,
 ) {
   const supabase = await createClient();

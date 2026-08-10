@@ -39,6 +39,8 @@ export default function RecordsView({ store, setStore, storageError, onNotice, i
     undoTimers.current.forEach(clearTimeout);
   }, []);
 
+  // 外部路由变化需要同步当前选择。
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setSelectedId(initialSelectedId), [initialSelectedId]);
 
   function selectRecord(id: string | null) {
