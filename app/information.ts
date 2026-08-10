@@ -9,7 +9,7 @@ export type LinkBlock = { id: string; type: "link"; url: string; title: string; 
 export type FileBlock = { id: string; type: "file"; name: string; mime: string; size: number; dataUrl: string };
 export type InfoBlock = TextBlock | LinkBlock | FileBlock;
 // v2：资源增加 order 字段支持看板内手动排序；保留 documentHtml 以兼容统一文档编辑器。
-export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; documentHtml?: string; blocks: InfoBlock[]; pinned: boolean; order: number; createdAt: number; updatedAt: number };
+export type ResourceItem = { id: string; sectionId: string; title: string; titleAuto?: boolean; documentHtml?: string; blocks: InfoBlock[]; plainText?: string; pinned: boolean; order: number; createdAt: number; updatedAt: number };
 export type InfoStore = { version: 2; ungroupedName: string; ungroupedOrder: number; linkGroups: LinkGroup[]; sections: InfoSection[]; systems: SystemItem[]; resources: ResourceItem[] };
 
 // 链接分组：空字符串代表“未分组”。
@@ -336,12 +336,13 @@ export function parseInfoStore(raw: string): InfoStore | null {
       }).slice(0, 40);
       let documentHtml = typeof item.documentHtml === "string" ? sanitizeDocumentHtml(item.documentHtml) : undefined;
       if (documentHtml && htmlText(documentHtml).length > DOCUMENT_LIMIT) documentHtml = `<p>${escapeHtml(htmlText(documentHtml).slice(0, DOCUMENT_LIMIT)).replace(/\r?\n/g, "<br>")}</p>`;
-      if (!blocks.length && !htmlText(documentHtml || "")) return [];
+      const hasPlainText = typeof item.plainText === "string" && item.plainText.trim();
+      if (!blocks.length && !htmlText(documentHtml || "") && !hasPlainText) return [];
       seen.add(item.id);
       const derived = documentHtml ? deriveDocumentTitle(documentHtml, blocks) : deriveTitle(blocks);
       const rawTitle = typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 200) : derived;
       const repairTruncatedAutoTitle = rawTitle.length === 1 && derived.length > 1 && derived.startsWith(rawTitle);
-      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId) ? item.sectionId : firstSectionId, title: repairTruncatedAutoTitle ? derived : rawTitle, titleAuto: repairTruncatedAutoTitle || Boolean(item.titleAuto), documentHtml, blocks, pinned: Boolean(item.pinned), order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
+      return [{ id: item.id, sectionId: sections.some((section) => section.id === item.sectionId) ? item.sectionId : firstSectionId, title: repairTruncatedAutoTitle ? derived : rawTitle, titleAuto: repairTruncatedAutoTitle || Boolean(item.titleAuto), documentHtml, blocks, plainText: typeof item.plainText === "string" ? item.plainText : undefined, pinned: Boolean(item.pinned), order: Number(item.order) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
     });
     const normalizedSections = sections.sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).map((section, order) => ({ ...section, order }));
     const normalizedGroups = linkGroups.map((group, order) => ({ ...group, order }));

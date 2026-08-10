@@ -1,7 +1,9 @@
 import { getUserId } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { shouldMarkLegacy } from "@/lib/task-period";
+import { isIsoDate, isTaskVisibleInSchedule } from "@/lib/task-period";
+import { rolloverDueTasks } from "@/lib/server/rollover-due-tasks";
+import { mergeLegacyWeekTasks } from "@/lib/workbench-task-state";
 import { z } from "zod";
 import { v4 as uuid } from "uuid";
 
@@ -12,14 +14,15 @@ const taskSchema = z.object({
   label: z.string().trim().min(1).max(200),
   done: z.boolean(),
   priority: z.boolean(),
-  legacy: z.boolean(),
+  expectedCompletionDate: z.string().refine(isIsoDate).nullable().optional(),
+  isOverdue: z.boolean().optional(),
   createdAt: timestamp,
   completedAt: timestamp.nullable().optional(),
 });
 const completionSchema = z.object({
   taskId: id,
   label: z.string().max(200),
-  source: z.enum(["today", "week", "later"]),
+  expectedCompletionDate: z.string().refine(isIsoDate).nullable().optional(),
   completedAt: timestamp,
 });
 const categorySchema = z.object({
@@ -76,7 +79,7 @@ const stateSchema = z.object({
     savedDate: z.string().max(10),
     tasks: z.object({
       today: z.array(taskSchema).max(5000),
-      week: z.array(taskSchema).max(5000),
+      week: z.array(taskSchema).max(5000).optional(),
       later: z.array(taskSchema).max(5000),
     }),
     hideDone: z.boolean(),
@@ -102,46 +105,6 @@ const stateSchema = z.object({
 
 type Supabase = ReturnType<typeof createAdminClient>;
 const SORT_GAP = 1_000_000;
-
-/**
- * 每日/每周 rollover：
- *  - area=today 未完成：created_at（北京时间）早于今天 → is_legacy=true
- *  - area=week  未完成：created_at（北京时间）早于本周一 → is_legacy=true
- */
-async function rolloverLegacyTasks(supabase: Supabase, userId: string) {
-  const { data: rows, error } = await supabase
-    .from("tasks")
-    .select("id,area,is_completed,is_legacy,created_at,version")
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .eq("is_completed", false)
-    .in("area", ["today", "week"]);
-  if (error || !rows) return;
-
-  const updates: Array<{ id: string; is_legacy: boolean; version: number }> = [];
-
-  for (const r of rows) {
-    const shouldLegacy = shouldMarkLegacy({
-      area: r.area,
-      isCompleted: r.is_completed,
-      createdAt: r.created_at,
-    });
-    if (shouldLegacy !== r.is_legacy) {
-      updates.push({ id: r.id, is_legacy: shouldLegacy, version: Number(r.version ?? 0) + 1 });
-    }
-  }
-
-  if (!updates.length) return;
-  await Promise.all(
-    updates.map((u) =>
-      supabase
-        .from("tasks")
-        .update({ is_legacy: u.is_legacy, version: u.version })
-        .eq("id", u.id)
-        .eq("user_id", userId),
-    ),
-  );
-}
 
 function requestError(message: string, requestId: string) {
   return new AppError("VALIDATION_ERROR", message).toResponse(requestId);
@@ -216,11 +179,7 @@ async function ensureDefaults(supabase: Supabase, userId: string) {
 
 async function readState(supabase: Supabase, userId: string) {
   await ensureDefaults(supabase, userId);
-  try {
-    await rolloverLegacyTasks(supabase, userId);
-  } catch {
-    // rollover 失败不阻塞正常读取
-  }
+  const { timeZone } = await rolloverDueTasks(supabase, userId);
   const [
     tasksResult,
     recordCategoriesResult,
@@ -252,25 +211,34 @@ async function readState(supabase: Supabase, userId: string) {
   ].find((result) => result.error);
   if (failed?.error) throw failed.error;
 
-  const taskGroups: Record<"today" | "week" | "later", unknown[]> = { today: [], week: [], later: [] };
+  const taskGroups: Record<"today" | "later", unknown[]> = { today: [], later: [] };
   const completionHistory: unknown[] = [];
   for (const row of tasksResult.data ?? []) {
-    const area = row.area as "today" | "week" | "later";
+    const area = row.area === "today" ? "today" : "later";
     const task = {
       id: row.id,
       label: row.title,
       done: row.is_completed,
       priority: row.is_p0,
-      legacy: row.is_legacy,
+      expectedCompletionDate: row.expected_completion_date,
+      isOverdue: row.is_overdue,
       createdAt: new Date(row.created_at).getTime(),
       completedAt: row.completed_at ? new Date(row.completed_at).getTime() : null,
     };
-    taskGroups[area].push(task);
+    if (isTaskVisibleInSchedule({
+      area,
+      isCompleted: row.is_completed,
+      expectedCompletionDate: row.expected_completion_date,
+      createdAt: row.created_at,
+      completedAt: row.completed_at,
+    }, undefined, timeZone, preferencesResult.data?.hide_completed ?? false)) {
+      taskGroups[area].push(task);
+    }
     if (row.is_completed && row.completed_at) {
       completionHistory.push({
         taskId: row.id,
         label: row.title,
-        source: area,
+        expectedCompletionDate: row.expected_completion_date,
         completedAt: new Date(row.completed_at).getTime(),
       });
     }
@@ -289,7 +257,12 @@ async function readState(supabase: Supabase, userId: string) {
   return {
     schedule: {
       version: 1,
-      savedDate: new Date().toISOString().slice(0, 10),
+      savedDate: new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date()),
       tasks: taskGroups,
       hideDone: preferences?.hide_completed ?? false,
       mood: 2,
@@ -358,6 +331,7 @@ async function readState(supabase: Supabase, userId: string) {
           titleAuto: row.title_mode === "auto",
           documentHtml: typeof document.documentHtml === "string" ? document.documentHtml : undefined,
           blocks: Array.isArray(document.blocks) ? document.blocks : [],
+          plainText: row.plain_text || "",
           pinned: row.is_pinned,
           order: index,
           createdAt: new Date(row.created_at).getTime(),
@@ -467,9 +441,18 @@ async function writeState(
   if (ungroupedError) throw ungroupedError;
 
   const completionTimes = new Map(state.schedule.completionHistory.map((item) => [item.taskId, item.completedAt]));
-  const allTasks = (["today", "week", "later"] as const).flatMap((area) =>
-    state.schedule.tasks[area].map((item, index) => ({ ...item, area, index })),
-  );
+  const allTasksById = new Map<string, z.infer<typeof taskSchema> & {
+    area: "today" | "later";
+    index: number;
+  }>();
+  const mergedTaskGroups = mergeLegacyWeekTasks(state.schedule.tasks);
+  mergedTaskGroups.today.forEach((item, index) => {
+    allTasksById.set(item.id, { ...item, area: "today", index });
+  });
+  mergedTaskGroups.later.forEach((item, index) => {
+    allTasksById.set(item.id, { ...item, area: "later", index });
+  });
+  const allTasks = [...allTasksById.values()];
   await upsertOwned(supabase, "tasks", allTasks.map((item) => ({
     id: item.id,
     user_id: userId,
@@ -477,7 +460,8 @@ async function writeState(
     area: item.area,
     is_completed: item.done,
     is_p0: item.priority,
-    is_legacy: item.legacy,
+    expected_completion_date: item.expectedCompletionDate ?? null,
+    is_overdue: item.done ? false : (item.isOverdue ?? false),
     sort_key: String(item.index * SORT_GAP),
     completed_at: item.done
       ? new Date(item.completedAt ?? completionTimes.get(item.id) ?? Date.now()).toISOString()

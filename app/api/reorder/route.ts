@@ -12,27 +12,32 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return new AppError(
       "VALIDATION_ERROR",
-      parsed.error.errors[0]?.message ?? "参数无效",
-      parsed.error.errors[0]?.path.join("."),
+      parsed.error.issues[0]?.message ?? "参数无效",
+      parsed.error.issues[0]?.path.join("."),
     ).toResponse(requestId);
   }
 
   const { entity, id, targetGroupId, beforeId, version } = parsed.data;
   const supabase = createAdminClient();
 
-  const table = entity === "task" ? "tasks" : entity === "link" ? "links" : "resources";
-  const groupCol = entity === "task" ? "area" : entity === "link" ? "group_id" : "category_id";
-
   // 使用数据库事务完成排序
-  const { error } = await supabase.rpc("reorder_entity", {
-    p_user_id: userId,
-    p_table: table,
-    p_id: id,
-    p_group_col: groupCol,
-    p_target_group_id: targetGroupId ?? null,
-    p_before_id: beforeId ?? null,
-    p_version: version,
-  });
+  const { error } = entity === "task"
+    ? await supabase.rpc("move_task", {
+      p_user_id: userId,
+      p_task_id: id,
+      p_target_area: targetGroupId,
+      p_before_id: beforeId ?? null,
+      p_version: version,
+    })
+    : await supabase.rpc("reorder_entity", {
+      p_user_id: userId,
+      p_table: entity === "link" ? "links" : "resources",
+      p_id: id,
+      p_group_col: entity === "link" ? "group_id" : "category_id",
+      p_target_group_id: targetGroupId ?? null,
+      p_before_id: beforeId ?? null,
+      p_version: version,
+    });
 
   if (error) {
     if (error.message.includes("version")) {

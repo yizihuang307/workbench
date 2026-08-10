@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Task, TaskArea } from "@/types/domain";
-import { AppError, conflict, notFound } from "@/lib/errors";
+import { AppError, conflict } from "@/lib/errors";
 
 // ===== 查询 =====
 
@@ -40,6 +40,7 @@ export async function createTask(
   title: string,
   area: TaskArea,
   sortKey?: string,
+  expectedCompletionDate?: string | null,
 ) {
   const supabase = await createClient();
 
@@ -64,6 +65,7 @@ export async function createTask(
       user_id: userId,
       title,
       area,
+      expected_completion_date: expectedCompletionDate ?? null,
       sort_key: sortKey,
       version: 1,
     })
@@ -79,7 +81,16 @@ export async function createTask(
 export async function updateTask(
   userId: string,
   taskId: string,
-  patch: Partial<Pick<Task, "title" | "area" | "is_completed" | "is_p0" | "is_legacy" | "sort_key" | "completed_at">>,
+  patch: Partial<{
+    title: string;
+    area: TaskArea;
+    is_completed: boolean;
+    is_p0: boolean;
+    expected_completion_date: string | null;
+    is_overdue: boolean;
+    sort_key: string;
+    completed_at: string | null;
+  }>,
   version: number,
 ) {
   const supabase = await createClient();
@@ -152,11 +163,11 @@ export async function moveTask(
 
 // ===== 跨日处理 =====
 
-export async function markLegacy(userId: string) {
+export async function markOverdue(userId: string) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("tasks")
-    .update({ is_legacy: true })
+    .update({ is_overdue: true })
     .eq("user_id", userId)
     .eq("area", "today")
     .eq("is_completed", false)

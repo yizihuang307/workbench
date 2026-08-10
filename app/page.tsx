@@ -9,15 +9,16 @@ import { emptyInfoStore, type InfoStore } from "./information";
 import { addCompletion, cleanCompletionHistory, completionsForDay, completionsForWeek, dayStart, removeCompletion, weekStart, type CompletionRecord } from "./completion-history";
 import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
-import { isTaskVisibleInSchedule } from "@/lib/task-period";
+import { calendarDate, getRolloverDecision, isIsoDate, isTaskInPeriod, isTaskVisibleInSchedule, type TaskPeriod } from "@/lib/task-period";
 
-type Group = "today" | "week" | "later";
+type Group = "today" | "later";
 type Task = {
   id: string;
   label: string;
   done: boolean;
   priority: boolean;
-  legacy: boolean;
+  expectedCompletionDate: string | null;
+  isOverdue: boolean;
   createdAt: number;
   completedAt: number | null;
 };
@@ -40,11 +41,10 @@ function routeState(pathname: string) {
   return { page, detailId: id || null };
 }
 
-const GROUPS: Group[] = ["today", "week", "later"];
-const GROUP_NAME: Record<Group, string> = { today: "今日安排", week: "本周安排", later: "后续安排" };
+const GROUPS: Group[] = ["today", "later"];
+const GROUP_NAME: Record<Group, string> = { today: "今日安排", later: "后续安排" };
 const initialTasks: Tasks = {
   today: [],
-  week: [],
   later: [],
 };
 
@@ -53,16 +53,69 @@ function id() {
 }
 
 function makeTask(label: string, patch: Partial<Task> = {}): Task {
-  return { id: id(), label, done: false, priority: false, legacy: false, createdAt: Date.now(), completedAt: null, ...patch };
+  return { id: id(), label, done: false, priority: false, expectedCompletionDate: null, isOverdue: false, createdAt: Date.now(), completedAt: null, ...patch };
 }
 
 function localDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return calendarDate(new Date(), "Asia/Shanghai");
 }
 
 function emptyStore(): Store {
   return { version: 1, savedDate: localDate(), tasks: initialTasks, hideDone: false, mood: 2, quickNotes: [], completionHistory: [] };
+}
+
+function normalizeTask(value: unknown): Task | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<Task>;
+  const label = typeof item.label === "string" ? item.label.trim().slice(0, 200) : "";
+  if (typeof item.id !== "string" || !label) return null;
+  return makeTask(label, {
+    id: item.id,
+    done: Boolean(item.done),
+    priority: Boolean(item.priority),
+    expectedCompletionDate: typeof item.expectedCompletionDate === "string" && isIsoDate(item.expectedCompletionDate) ? item.expectedCompletionDate : null,
+    isOverdue: Boolean(item.isOverdue),
+    createdAt: typeof item.createdAt === "number" && Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+    completedAt: typeof item.completedAt === "number" && Number.isFinite(item.completedAt) ? item.completedAt : null,
+  });
+}
+
+function rolloverTasks(tasks: Tasks): Tasks {
+  const result: Tasks = { today: [], later: [] };
+  for (const group of GROUPS) {
+    for (const task of tasks[group]) {
+      const decision = getRolloverDecision({
+        area: group,
+        isCompleted: task.done,
+        createdAt: task.createdAt,
+        completedAt: task.completedAt,
+        expectedCompletionDate: task.expectedCompletionDate,
+      });
+      result[decision.area].push({ ...task, isOverdue: decision.isOverdue });
+    }
+  }
+  return result;
+}
+
+function normalizeStore(value: unknown): Store {
+  const fallback = emptyStore();
+  if (!value || typeof value !== "object") return fallback;
+  const source = value as Partial<Store> & { tasks?: Partial<Tasks> & { week?: unknown[] } };
+  const today = Array.isArray(source.tasks?.today) ? source.tasks.today.map(normalizeTask).filter((task): task is Task => Boolean(task)) : [];
+  const laterValues = [
+    ...(Array.isArray(source.tasks?.week) ? source.tasks.week : []),
+    ...(Array.isArray(source.tasks?.later) ? source.tasks.later : []),
+  ];
+  const later = laterValues.map(normalizeTask).filter((task): task is Task => Boolean(task));
+  return {
+    version: 1,
+    savedDate: localDate(),
+    tasks: rolloverTasks({ today, later }),
+    hideDone: Boolean(source.hideDone),
+    mood: typeof source.mood === "number" ? source.mood : fallback.mood,
+    quickNotes: Array.isArray(source.quickNotes) ? source.quickNotes : [],
+    completionHistory: cleanCompletionHistory(source.completionHistory),
+  };
 }
 
 export default function Home() {
@@ -103,7 +156,7 @@ export default function Home() {
     void (async () => {
       try {
         const cloud = await loadWorkbenchState<Store, RecordStore, InfoStore>();
-        setStore({ ...cloud.schedule, completionHistory: cleanCompletionHistory(cloud.schedule.completionHistory) });
+        setStore(normalizeStore(cloud.schedule));
         setRecordStore(cloud.records);
         setInfoStore(cloud.information);
         cloudLoaded.current = true;
@@ -180,16 +233,16 @@ export default function Home() {
       return {
         ...current,
         savedDate: localDate(),
-        tasks: { ...current.tasks, [group]: current.tasks[group].map((item) => item.id === taskId ? { ...item, done: completing, completedAt: completing ? Date.now() : null, legacy: completing ? false : item.legacy } : item) },
+        tasks: { ...current.tasks, [group]: current.tasks[group].map((item) => item.id === taskId ? { ...item, done: completing, completedAt: completing ? Date.now() : null, isOverdue: completing ? false : getRolloverDecision({ area: group, isCompleted: false, createdAt: item.createdAt, expectedCompletionDate: item.expectedCompletionDate }).isOverdue } : item) },
         completionHistory: completing
-          ? addCompletion(current.completionHistory, { taskId, label: task.label, source: group, completedAt: Date.now() })
+          ? addCompletion(current.completionHistory, { taskId, label: task.label, completedAt: Date.now(), ...(task.expectedCompletionDate ? { expectedCompletionDate: task.expectedCompletionDate } : {}) })
           : removeCompletion(current.completionHistory, taskId),
       };
     });
   }
 
-  function togglePriority(taskId: string) {
-    updateTasks((tasks) => ({ ...tasks, today: tasks.today.map((task) => task.id === taskId ? { ...task, priority: !task.priority } : task) }));
+  function togglePriority(group: Group, taskId: string) {
+    updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId ? { ...task, priority: !task.priority } : task) }));
   }
 
   function editTask(group: Group, taskId: string, label: string) {
@@ -197,6 +250,44 @@ export default function Home() {
     if (!clean) return false;
     setStore((current) => ({ ...current, savedDate: localDate(), tasks: { ...current.tasks, [group]: current.tasks[group].map((task) => task.id === taskId ? { ...task, label: clean } : task) }, completionHistory: current.completionHistory.map((item) => item.taskId === taskId ? { ...item, label: clean } : item) }));
     return true;
+  }
+
+  function setExpectedCompletionDate(group: Group, taskId: string, value: string) {
+    if (value && !isIsoDate(value)) return;
+    setStore((current) => {
+      const task = current.tasks[group].find((item) => item.id === taskId);
+      if (!task) return current;
+      const expectedCompletionDate = value || null;
+      let target: Group = group;
+      let isOverdue = false;
+      if (!task.done) {
+        if (group === "today" && expectedCompletionDate && expectedCompletionDate > localDate()) {
+          target = "later";
+        } else {
+          const decision = getRolloverDecision({
+            area: group,
+            isCompleted: false,
+            createdAt: task.createdAt,
+            expectedCompletionDate,
+          });
+          target = decision.area;
+          isOverdue = decision.isOverdue;
+        }
+      }
+      const updated = { ...task, expectedCompletionDate, isOverdue };
+      const tasks = { ...current.tasks, [group]: current.tasks[group].filter((item) => item.id !== taskId) };
+      tasks[target] = target === group
+        ? current.tasks[group].map((item) => item.id === taskId ? updated : item)
+        : [...tasks[target], updated];
+      return {
+        ...current,
+        savedDate: localDate(),
+        tasks,
+        completionHistory: current.completionHistory.map((item) => item.taskId === taskId
+          ? { ...item, expectedCompletionDate: expectedCompletionDate || undefined }
+          : item),
+      };
+    });
   }
 
   function moveTask(from: Group, taskId: string, to: Group, beforeId?: string) {
@@ -214,7 +305,7 @@ export default function Home() {
         return { ...tasks, [from]: list };
       }
       const next = { ...tasks, [from]: tasks[from].filter((item) => item.id !== taskId) };
-      const moved = { ...task, priority: to === "today" ? task.priority : false, legacy: false };
+      const moved = { ...task, isOverdue: task.done ? false : getRolloverDecision({ area: to, isCompleted: false, createdAt: task.createdAt, expectedCompletionDate: task.expectedCompletionDate }).isOverdue };
       const target = [...next[to]];
       const index = beforeId ? target.findIndex((item) => item.id === beforeId) : -1;
       target.splice(index < 0 ? target.length : index, 0, moved);
@@ -251,7 +342,7 @@ export default function Home() {
 
   const today = new Date();
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
-  const actions = { addTask, toggleTask, togglePriority, editTask, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
+  const actions = { addTask, toggleTask, togglePriority, editTask, setExpectedCompletionDate, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
 
   async function handleLogout() {
     await createClient().auth.signOut();
@@ -299,10 +390,7 @@ export default function Home() {
 
         <div className="board">
           <TaskArea group="today" tasks={store.tasks.today} {...actions} onExpand={() => setExpanded("today")} onOpenHistory={() => setHistoryOpen(true)} expandRef={(node) => { expandButtons.current.today = node; }} featured />
-          <div className="side-areas">
-            <TaskArea group="week" tasks={store.tasks.week} {...actions} onExpand={() => setExpanded("week")} expandRef={(node) => { expandButtons.current.week = node; }} />
-            <TaskArea group="later" tasks={store.tasks.later} {...actions} onExpand={() => setExpanded("later")} expandRef={(node) => { expandButtons.current.later = node; }} />
-          </div>
+          <TaskArea group="later" tasks={store.tasks.later} {...actions} onExpand={() => setExpanded("later")} expandRef={(node) => { expandButtons.current.later = node; }} />
         </div>
       </div>
     </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} initialSelectedId={detailId} onSelectedChange={(id) => setDetail("records", id)} /></section> : activePage === "links" ? <section className="content"><LinkLibraryView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section> : <section className="content"><ResourceBoardView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} initialEditingId={detailId} onEditingChange={(id) => setDetail("resources", id)} /></section>}
@@ -322,7 +410,6 @@ export default function Home() {
   </main>;
 }
 
-const SOURCE_NAME: Record<Group, string> = { today: "来自今日", week: "来自本周", later: "来自后续" };
 const WEEKDAY_SLOGANS = [
   "敛神蓄气力，前路自可期",
   "蓄力开新局，万事皆顺意",
@@ -332,6 +419,11 @@ const WEEKDAY_SLOGANS = [
   "认真收尾忙，周末有蜜糖",
   "闲享好时光，喜乐日日长",
 ];
+
+function formatExpectedDate(value: string) {
+  const [, month, day] = value.split("-").map(Number);
+  return `${month}/${day}`;
+}
 
 function CompletionHistory({ history }: { history: CompletionRecord[] }) {
   const [mode, setMode] = useState<"day" | "week">("day");
@@ -369,7 +461,7 @@ function CompletionHistory({ history }: { history: CompletionRecord[] }) {
     <p className="history-summary">共完成 <strong>{items.length}</strong> 项</p>
     {items.length ? <div className="history-list">{Object.entries(grouped).map(([date, records]) => <section key={date}>
       {mode === "week" && <h3>{formatDate(Number(date))}</h3>}
-      {records.map((item) => <article key={item.taskId}><span aria-hidden>✓</span><div className="history-item-title">{item.label}</div><small>{SOURCE_NAME[item.source]} · {new Date(item.completedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</small></article>)}
+      {records.map((item) => <article key={item.taskId}><span aria-hidden>✓</span><div className="history-item-title">{item.label}</div><small>{new Date(item.completedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}{item.expectedCompletionDate ? ` · 原计划 ${formatExpectedDate(item.expectedCompletionDate)}` : ""}</small></article>)}
     </section>)}</div> : <div className="history-empty"><b>✓</b><strong>这个时段还没有完成事项</strong><span>完成事项后会自动出现在这里</span></div>}
   </section>;
 }
@@ -377,8 +469,9 @@ function CompletionHistory({ history }: { history: CompletionRecord[] }) {
 type AreaActions = {
   addTask: (group: Group, label: string) => boolean;
   toggleTask: (group: Group, id: string) => void;
-  togglePriority: (id: string) => void;
+  togglePriority: (group: Group, id: string) => void;
   editTask: (group: Group, id: string, label: string) => boolean;
+  setExpectedCompletionDate: (group: Group, id: string, value: string) => void;
   moveTask: (from: Group, id: string, to: Group, beforeId?: string) => void;
   deleteTask: (group: Group, id: string) => void;
   dragged: { group: Group; id: string } | null;
@@ -390,17 +483,21 @@ type AreaActions = {
 function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured = false, expanded = false, ...actions }: AreaActions & {
   group: Group; tasks: Task[]; onExpand: () => void; onOpenHistory?: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
 }) {
+  const [period, setPeriod] = useState<TaskPeriod>("all");
   const activeTasks = useMemo(() => tasks.filter((task) => isTaskVisibleInSchedule({
     area: group,
     isCompleted: task.done,
     createdAt: task.createdAt,
     completedAt: task.completedAt,
+    expectedCompletionDate: task.expectedCompletionDate,
   })), [group, tasks]);
-  const shown = useMemo(() => actions.hideDone ? activeTasks.filter((task) => !task.done) : activeTasks, [actions.hideDone, activeTasks]);
+  const periodTasks = useMemo(() => group === "later" ? activeTasks.filter((task) => isTaskInPeriod(task, period)) : activeTasks, [activeTasks, group, period]);
+  const shown = useMemo(() => actions.hideDone ? periodTasks.filter((task) => !task.done) : periodTasks, [actions.hideDone, periodTasks]);
   const complete = activeTasks.filter((task) => task.done).length;
-  return <section className={`task-area area-${group} ${featured ? "featured" : ""} ${expanded ? "expanded" : ""}`}
+  return <section className={`task-area ${group === "later" ? "area-week" : `area-${group}`} ${featured || (group === "later" && !expanded) ? "featured" : ""} ${expanded ? "expanded" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
-    <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日或本周</p>}</div></div>
+    <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日</p>}</div></div>
+      {group === "later" && <select value={period} onChange={(event) => setPeriod(event.target.value as TaskPeriod)} aria-label="筛选后续安排"><option value="all">全部</option><option value="this-week">本周</option><option value="next-week">下周</option><option value="this-month">本月</option></select>}
       {!expanded && <div className="area-header-actions">{group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}<button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button></div>}
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
@@ -422,6 +519,7 @@ function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, value
 
 function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group: Group }) {
   const [editing, setEditing] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
   const [draft, setDraft] = useState(task.label);
   const [menuOpen, setMenuOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -443,15 +541,21 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
     };
   }, [menuOpen]);
   function save() { if (actions.editTask(group, task.id, draft)) setEditing(false); else setDraft(task.label); }
-  return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing}
+  return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing && !editingDate}
     onDragStart={() => actions.setDragged({ group, id: task.id })} onDragEnd={() => actions.setDragged(null)}
     onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group, task.id); actions.setDragged(null); }}>
     <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
     <div className="task-copy">
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
-        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.legacy && <em>{group === "week" ? "上周遗留" : "昨日遗留"}</em>}</div>}
+        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.isOverdue && !task.done && <em>{task.expectedCompletionDate ? `已逾期 · ${formatExpectedDate(task.expectedCompletionDate)}` : "已逾期"}</em>}</div>}
     </div>
-    {group === "today" && !task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
+    {editingDate
+      ? <input type="date" value={task.expectedCompletionDate || ""} autoFocus aria-label={`设置${task.label}的预计完成日期`} onBlur={() => setEditingDate(false)} onChange={(event) => { actions.setExpectedCompletionDate(group, task.id, event.target.value); setEditingDate(false); }} />
+      : task.expectedCompletionDate
+        ? <button onClick={() => setEditingDate(true)} aria-label={`修改${task.label}的预计完成日期`}>{formatExpectedDate(task.expectedCompletionDate)}</button>
+        : <button onClick={() => setEditingDate(true)} aria-label={`设置${task.label}的预计完成日期`} title="设置预计完成日期">📅</button>}
+    {task.expectedCompletionDate && <button onClick={() => actions.setExpectedCompletionDate(group, task.id, "")} aria-label={`清除${task.label}的预计完成日期`}>×</button>}
+    {!task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(group, task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
     <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>···</button>
       {menuOpen && <div className="task-menu" role="menu">
         <button onClick={() => { setEditing(true); setMenuOpen(false); }}>编辑</button>
@@ -475,7 +579,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
     function key(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
       if (event.key === "Tab" && box.current) {
-        const focusable = [...box.current.querySelectorAll<HTMLElement>("button:not(:disabled), input, textarea")];
+        const focusable = [...box.current.querySelectorAll<HTMLElement>("button:not(:disabled), input, select, textarea")];
         if (!focusable.length) return;
         const first = focusable[0], last = focusable[focusable.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }

@@ -1,6 +1,6 @@
 // ===== 基础类型 =====
 
-export type TaskArea = "today" | "week" | "later";
+export type TaskArea = "today" | "later";
 
 export type Task = {
   id: string;
@@ -9,9 +9,11 @@ export type Task = {
   area: TaskArea;
   isCompleted: boolean;
   isP0: boolean;
-  isLegacy: boolean;
+  expectedCompletionDate: string | null;
+  isOverdue: boolean;
   sortKey: string; // numeric(20,10) as string
   completedAt: string | null; // timestamptz
+  version: number;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

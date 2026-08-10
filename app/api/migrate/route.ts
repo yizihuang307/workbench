@@ -1,6 +1,7 @@
 import { getUserId } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AppError } from "@/lib/errors";
+import { isIsoDate } from "@/lib/task-period";
 import { v4 as uuid } from "uuid";
 
 // 旧 localStorage/IndexedDB 数据迁移到 Supabase
@@ -25,14 +26,18 @@ export async function POST(request: Request) {
       for (const item of body.tasks) {
         if (typeof item !== "object" || !item) { results.skipped++; continue; }
         const t = item as Record<string, unknown>;
+        const rawArea = String(t.area ?? t.group ?? "today");
+        const expectedCompletionDate = typeof t.expectedCompletionDate === "string" &&
+          isIsoDate(t.expectedCompletionDate) ? t.expectedCompletionDate : null;
         const { error } = await supabase.from("tasks").upsert({
           id: t.id as string,
           user_id: userId,
           title: String(t.label ?? t.title ?? "").slice(0, 200),
-          area: String(t.area ?? t.group ?? "today"),
+          area: rawArea === "today" ? "today" : "later",
           is_completed: Boolean(t.done ?? t.isCompleted),
           is_p0: Boolean(t.priority ?? t.isP0),
-          is_legacy: Boolean(t.legacy ?? t.isLegacy),
+          expected_completion_date: expectedCompletionDate,
+          is_overdue: false,
           sort_key: String(t.sortKey ?? t.createdAt ?? Date.now()),
           completed_at: t.completedAt ? new Date(t.completedAt as number).toISOString() : null,
           version: 1,
@@ -117,7 +122,7 @@ export async function POST(request: Request) {
     }
 
     return Response.json({ success: true, requestId, results });
-  } catch (err) {
+  } catch {
     return new AppError("INTERNAL_ERROR", "迁移失败").toResponse(requestId);
   }
 }

@@ -19,7 +19,7 @@
 ### 1.1 本期包含
 
 - 账号：邮箱验证码/魔法链接登录、退出、会话恢复。
-- 【今日事】（安排域）：今日、本周、后续；完成/恢复、P0、排序、跨区移动、遗留、完成记录。
+- 【今日事】（安排域）：今日安排、后续安排；预计完成日期、后续日期筛选、未完成事项自动移入今日、已逾期、完成/恢复、P0、排序、跨区移动、完成记录。
 - 【随手记】（记录域）：分类、无标题文档、富文本与图片、搜索高亮、移动、删除撤销、AI 整理。
 - 【传送门】（链接域）：分组、元数据识别、编辑、排序、跨组移动、搜索、打开计数。
 - 【资料库】（资料域）：横向分类看板、分类排序、资料排序/跨组移动、搜索、连续文档、附件。
@@ -86,7 +86,7 @@ tests/{unit,integration,e2e,security}/
 |---|---|---|
 | `profiles` | `id = auth.users.id`, `display_name`, `timezone` | 每用户一行 |
 | `user_preferences` | `user_id`, `quick_record_category_id`, `hide_completed`, `schema_version` | 用户全局偏好 |
-| `tasks` | `user_id`, `title`, `area(today/week/later)`, `is_completed`, `is_p0`, `is_legacy`, `sort_key`, `completed_at`, `deleted_at` | 安排与完成记录 |
+| `tasks` | `user_id`, `title`, `area(today/later)`, `expected_completion_date`, `is_completed`, `is_p0`, `is_overdue`, `sort_key`, `completed_at`, `deleted_at` | 安排与完成记录；预计完成日期为可空 `date`，仅未完成事项会依此迁移 |
 | `record_categories` | `user_id`, `name`, `sort_key`, `is_default_seed`, `deleted_at` | 记录分类 |
 | `records` | `user_id`, `category_id`, `title`, `title_mode(auto/manual)`, `document_json`, `plain_text`, `is_pinned`, `sort_key`, `version`, `deleted_at` | 文档正文和搜索文本 |
 | `record_assets` | `user_id`, `record_id`, `storage_path`, `mime_type`, `size_bytes`, `sort_key` | 记录图片/附件 |
@@ -102,7 +102,8 @@ tests/{unit,integration,e2e,security}/
 
 - 所有列表：`(user_id, deleted_at, sort_key)`。
 - 分类内列表：`(user_id, category_id, deleted_at, sort_key)`。
-- 完成记录：`(user_id, completed_at desc) where is_completed`。
+- 后续安排日期筛选：`(user_id, area, expected_completion_date, sort_key) where deleted_at is null`。
+- 完成记录：`(user_id, completed_at desc) where is_completed`；不持久化首页来源，仅从 `expected_completion_date` 读取原计划日期。
 - 搜索：`plain_text` 与 `name/title/url` 建 `pg_trgm` GIN；中文首期使用 `websearch_to_tsquery` 不可靠时走 trigram。
 - URL 去重：`(user_id, normalized_url) where deleted_at is null`，是否允许重复由业务确认参数控制。
 

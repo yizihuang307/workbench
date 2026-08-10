@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isIsoDate } from "@/lib/task-period";
 
 // ===== 通用校验 =====
 
@@ -29,17 +30,20 @@ export const versionSchema = z.number().int().min(1, "版本号无效");
 
 // ===== Task =====
 
+export const isoDateSchema = z.string().refine(isIsoDate, "日期必须为有效的 YYYY-MM-DD").nullable();
+
 export const createTaskSchema = z.object({
   title: titleSchema,
-  area: z.enum(["today", "week", "later"]),
+  area: z.enum(["today", "later"]),
+  expectedCompletionDate: isoDateSchema.optional(),
 });
 
 export const updateTaskSchema = z.object({
   title: titleSchema.optional(),
-  area: z.enum(["today", "week", "later"]).optional(),
+  area: z.enum(["today", "later"]).optional(),
   isCompleted: z.boolean().optional(),
   isP0: z.boolean().optional(),
-  isLegacy: z.boolean().optional(),
+  expectedCompletionDate: isoDateSchema.optional(),
   sortKey: z.string().optional(),
   version: versionSchema,
 });
@@ -97,13 +101,22 @@ export const updateResourceSchema = z.object({
 
 // ===== Reorder =====
 
-export const reorderSchema = z.object({
-  entity: z.enum(["task", "link", "resource"]),
-  id: idSchema,
-  targetGroupId: idSchema.optional(),
-  beforeId: idSchema.optional(),
-  version: versionSchema,
-});
+export const reorderSchema = z.discriminatedUnion("entity", [
+  z.object({
+    entity: z.literal("task"),
+    id: idSchema,
+    targetGroupId: z.enum(["today", "later"]).optional(),
+    beforeId: idSchema.optional(),
+    version: versionSchema,
+  }),
+  z.object({
+    entity: z.enum(["link", "resource"]),
+    id: idSchema,
+    targetGroupId: idSchema.optional(),
+    beforeId: idSchema.optional(),
+    version: versionSchema,
+  }),
+]);
 
 // ===== AI =====
 

@@ -1,5 +1,9 @@
-export type CompletionSource = "today" | "week" | "later";
-export type CompletionRecord = { taskId: string; label: string; source: CompletionSource; completedAt: number };
+export type CompletionRecord = {
+  taskId: string;
+  label: string;
+  completedAt: number;
+  expectedCompletionDate?: string;
+};
 
 const MAX_HISTORY = 5000;
 
@@ -12,11 +16,13 @@ export function cleanCompletionHistory(value: unknown): CompletionRecord[] {
     const item = entry as Partial<CompletionRecord>;
     const taskId = typeof item.taskId === "string" ? item.taskId : "";
     const label = typeof item.label === "string" ? item.label.trim().slice(0, 200) : "";
-    const source = item.source;
     const completedAt = typeof item.completedAt === "number" && Number.isFinite(item.completedAt) ? item.completedAt : 0;
-    if (!taskId || !label || ids.has(taskId) || (source !== "today" && source !== "week" && source !== "later") || completedAt <= 0) continue;
+    const expectedCompletionDate = typeof item.expectedCompletionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.expectedCompletionDate)
+      ? item.expectedCompletionDate
+      : undefined;
+    if (!taskId || !label || ids.has(taskId) || completedAt <= 0) continue;
     ids.add(taskId);
-    records.push({ taskId, label, source, completedAt });
+    records.push({ taskId, label, completedAt, ...(expectedCompletionDate ? { expectedCompletionDate } : {}) });
   }
   return records.sort((a, b) => b.completedAt - a.completedAt).slice(0, MAX_HISTORY);
 }

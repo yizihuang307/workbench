@@ -153,13 +153,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .quick-icon { position: relative; width: 20px; height: 20px; border-radius: 50%; background: var(--cobalt); }
 .quick-icon::before, .quick-icon::after { content: ""; position: absolute; top: 9px; left: 5px; width: 10px; height: 2px; background: white; }
 .quick-icon::after { transform: rotate(90deg); }
-.board { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(300px,.85fr); gap: 14px; margin-top: 18px; }
+.board { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; margin-top: 18px; }
 .side-areas { min-width: 0; display: grid; gap: 14px; }
 .task-area { min-width: 0; display: flex; flex-direction: column; overflow: visible; border: 1px solid var(--ink); background: var(--paper); }
 .task-area.featured { height: 560px; padding: 20px; }
-.side-areas .task-area { height: 273px; padding: 17px; }
+.side-areas .task-area { height: 560px; padding: 20px; }
 .area-week { background: var(--lemon); }
-.area-later { background: var(--sky); }
+.area-later { background: var(--lemon); }
 .area-header { min-height: 38px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .area-header > div { display: flex; gap: 10px; align-items: start; }
 .area-header h2 { margin: 0; font-size: 17px; font-weight: 800; }
@@ -190,6 +190,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .priority-button > span::before { content: "☆"; display: block; font-size: 18px; line-height: 1; font-weight: 400; }
 .priority-button.active > span::before { content: "★"; }
 .priority-button.active { color: var(--tomato); }
+.task-date-input { flex: 0 0 auto; width: 112px; min-width: 0; height: 34px; padding: 0 4px; border: 0; border-radius: 7px; background: transparent; color: var(--gray-11); font-size: 12px; white-space: nowrap; }
+.task-date-input:hover, .task-date-input:focus { background: var(--violet-3); outline: 1px solid var(--violet-6); }
+.task-date-input.empty { width: 30px; color: transparent; }
+.task-date-input.empty::-webkit-datetime-edit { display: none; }
+.task-period-select { height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--violet-6); border-radius: 8px; background: rgba(255,255,255,.72); color: var(--violet-12); font: inherit; font-size: 12px; }
 .more { font-size: 13px; font-weight: 500; letter-spacing: -.6px; }
 .priority-button + .menu-wrap { margin-left: -3px; }
 .menu-wrap { position: relative; }
@@ -210,7 +215,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .modal-close { position: sticky; z-index: 30; top: 10px; float: right; width: 44px; height: 44px; margin: 10px 10px -54px 0; border: 1px solid var(--ink); background: var(--paper); font-size: 22px; }
 .modal .task-area.expanded { min-height: min(720px, calc(100vh - 44px)); padding: 34px; border: 0; background: var(--paper); }
 .modal .task-area.expanded.area-week { background: var(--lemon); }
-.modal .task-area.expanded.area-later { background: var(--sky); }
+.modal .task-area.expanded.area-later { background: var(--lemon); }
 .quick-note { padding: 42px; background: var(--paper); }
 .quick-note > p { margin: 0; color: var(--tomato); font-size: 10px; font-weight: 900; letter-spacing: .14em; }
 .quick-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 8px 0 22px; }
@@ -749,9 +754,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .task-area.featured { height: 560px; padding: 21px; }
 .side-areas { gap: 16px; }
-.side-areas .task-area { height: 272px; padding: 18px; }
+.side-areas .task-area { height: 560px; padding: 21px; }
 .area-week { background: linear-gradient(145deg, rgba(240,240,255,.92), rgba(231,231,255,.76)); }
-.area-later { background: rgba(249,249,255,.76); }
+.area-later { background: linear-gradient(145deg, rgba(240,240,255,.92), rgba(231,231,255,.76)); }
 .area-header h2 { color: var(--violet-12); font-weight: 650; }
 .area-header h2 em { color: var(--violet-11); }
 .task-input, .info-search, .record-toolbar input {

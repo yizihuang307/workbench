@@ -12,9 +12,10 @@ const WEEKDAY_SLOGANS = [
   "闲享好时光，喜乐日日长",
 ];
 
-type Group = "today" | "week" | "later";
-const GROUPS: Group[] = ["today", "week", "later"];
-const GROUP_NAME: Record<Group, string> = { today: "今日安排", week: "本周安排", later: "后续安排" };
+type Group = "today" | "later";
+type Period = "all" | "this-week" | "next-week" | "this-month";
+const GROUPS: Group[] = ["today", "later"];
+const GROUP_NAME: Record<Group, string> = { today: "今日安排", later: "后续安排" };
 
 type Task = {
   id: string;
@@ -22,7 +23,8 @@ type Task = {
   area: Group;
   is_completed: boolean;
   is_p0: boolean;
-  is_legacy: boolean;
+  expected_completion_date: string | null;
+  is_overdue: boolean;
   sort_key: string;
   version: number;
   completed_at: string | null;
@@ -39,6 +41,7 @@ export default function TodayPage() {
   const [expanded, setExpanded] = useState<Group | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
+  const [period, setPeriod] = useState<Period>("all");
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -75,7 +78,26 @@ export default function TodayPage() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadTasks(); }, [loadTasks]);
+  // API 数据初始化属于外部状态同步。
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadTasks(); }, [loadTasks]);
+
+  useEffect(() => {
+    if (!ready) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/tasks?area=later&period=${period}`);
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        setTasks((current) => [
+          ...current.filter((task) => task.area !== "later"),
+          ...(json.data ?? []),
+        ]);
+      } catch {
+        setNotice("筛选加载失败");
+      }
+    })();
+  }, [period, ready]);
 
   useEffect(() => {
     if (!notice) return;
@@ -88,20 +110,12 @@ export default function TodayPage() {
 
   // 按组分类
   const grouped = useMemo(() => {
-    const result: Record<Group, Task[]> = { today: [], week: [], later: [] };
+    const result: Record<Group, Task[]> = { today: [], later: [] };
     for (const t of tasks) {
       if (t.area && result[t.area]) result[t.area].push(t);
     }
     return result;
   }, [tasks]);
-
-  const groupedCompleted = useMemo(() => {
-    const result: Record<Group, Task[]> = { today: [], week: [], later: [] };
-    for (const t of completedTasks) {
-      if (t.area && result[t.area]) result[t.area].push(t);
-    }
-    return result;
-  }, [completedTasks]);
 
   // 添加任务
   async function addTask(group: Group, title: string) {
@@ -129,7 +143,7 @@ export default function TodayPage() {
     setTasks((prev) =>
       prev.map((t) =>
         t.id === task.id
-          ? { ...t, is_completed: newCompleted, is_legacy: newCompleted ? false : t.is_legacy }
+          ? { ...t, is_completed: newCompleted }
           : t,
       ),
     );
@@ -187,6 +201,22 @@ export default function TodayPage() {
     }
   }
 
+  async function updateExpectedDate(task: Task, value: string) {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedCompletionDate: value || null, version: task.version }),
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setTasks((current) => current.map((item) => item.id === task.id ? json.data as Task : item));
+    } catch {
+      setNotice("日期保存失败，请重试");
+      void loadTasks();
+    }
+  }
+
   // 移动任务
   async function moveTask(from: Group, taskId: string, to: Group, beforeId?: string) {
     if (from === to && taskId === beforeId) return;
@@ -195,7 +225,7 @@ export default function TodayPage() {
     // 乐观更新
     setTasks((prev) => {
       const filtered = prev.filter((t) => t.id !== taskId);
-      const moved = { ...task, area: to, is_p0: to === "today" ? task.is_p0 : false, is_legacy: false };
+      const moved = { ...task, area: to };
       const targetList = filtered.filter((t) => t.area === to);
       const beforeIdx = beforeId ? targetList.findIndex((t) => t.id === beforeId) : -1;
       if (beforeIdx >= 0) targetList.splice(beforeIdx, 0, moved);
@@ -287,26 +317,12 @@ export default function TodayPage() {
           onToggle={toggleTask}
           onTogglePriority={togglePriority}
           onEdit={editTask}
+          onExpectedDateChange={updateExpectedDate}
           onMove={moveTask}
           onDelete={deleteTask}
           hideDone={hideDone}
           setHideDone={setHideDone}
         />
-        <div className="side-areas">
-          <TaskArea
-            group="week"
-            tasks={grouped.week}
-            expanded={false}
-            onExpand={() => setExpanded("week")}
-            onAdd={addTask}
-            onToggle={toggleTask}
-            onTogglePriority={togglePriority}
-            onEdit={editTask}
-            onMove={moveTask}
-            onDelete={deleteTask}
-            hideDone={hideDone}
-            setHideDone={setHideDone}
-          />
           <TaskArea
             group="later"
             tasks={grouped.later}
@@ -316,12 +332,14 @@ export default function TodayPage() {
             onToggle={toggleTask}
             onTogglePriority={togglePriority}
             onEdit={editTask}
+            onExpectedDateChange={updateExpectedDate}
             onMove={moveTask}
             onDelete={deleteTask}
             hideDone={hideDone}
             setHideDone={setHideDone}
+            period={period}
+            onPeriodChange={setPeriod}
           />
-        </div>
       </div>
 
       {expanded && (
@@ -335,10 +353,13 @@ export default function TodayPage() {
             onToggle={toggleTask}
             onTogglePriority={togglePriority}
             onEdit={editTask}
+            onExpectedDateChange={updateExpectedDate}
             onMove={moveTask}
             onDelete={deleteTask}
             hideDone={hideDone}
             setHideDone={setHideDone}
+            period={period}
+            onPeriodChange={setPeriod}
           />
         </Modal>
       )}
@@ -358,7 +379,7 @@ export default function TodayPage() {
 
       {deleted && (
         <div className="undo" role="status">
-          <span>已删除"{deleted.task.title}"</span>
+          <span>已删除“{deleted.task.title}”</span>
           <button onClick={undoDelete}>撤销</button>
         </div>
       )}
@@ -377,24 +398,30 @@ function TaskArea({
   onToggle,
   onTogglePriority,
   onEdit,
+  onExpectedDateChange,
   onMove,
   onDelete,
   hideDone,
   setHideDone,
+  period = "all",
+  onPeriodChange,
 }: {
   group: Group;
   tasks: Task[];
   expanded: boolean;
   featured?: boolean;
   onExpand: () => void;
-  onAdd: (group: Group, title: string) => boolean;
+  onAdd: (group: Group, title: string) => Promise<boolean>;
   onToggle: (task: Task) => void;
   onTogglePriority: (task: Task) => void;
-  onEdit: (task: Task, title: string) => boolean;
+  onEdit: (task: Task, title: string) => Promise<boolean>;
+  onExpectedDateChange?: (task: Task, value: string) => void;
   onMove: (from: Group, taskId: string, to: Group, beforeId?: string) => void;
   onDelete: (group: Group, taskId: string) => void;
   hideDone: boolean;
   setHideDone: (v: boolean) => void;
+  period?: Period;
+  onPeriodChange?: (period: Period) => void;
 }) {
   const shown = useMemo(() => (hideDone ? tasks.filter((t) => !t.is_completed) : tasks), [hideDone, tasks]);
   const complete = tasks.filter((t) => t.is_completed).length;
@@ -422,14 +449,22 @@ function TaskArea({
         <div>
           <div>
             <h2>{GROUP_NAME[group]} <em>共 {tasks.length} 项</em></h2>
-            {group === "later" && <p>暂未安排到今日或本周</p>}
+            {group === "later" && <p>尚未到期的后续事项</p>}
           </div>
         </div>
-        {!expanded && (
-          <button className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">
-            ↗
-          </button>
-        )}
+        <div className="area-header-actions">
+          {group === "later" && onPeriodChange && (
+            <select className="task-period-select" value={period} onChange={(e) => onPeriodChange(e.target.value as Period)} aria-label="筛选后续安排">
+              <option value="all">全部</option>
+              <option value="this-week">本周</option>
+              <option value="next-week">下周</option>
+              <option value="this-month">本月</option>
+            </select>
+          )}
+          {!expanded && (
+            <button className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button>
+          )}
+        </div>
       </header>
       <TaskInput group={group} onAdd={onAdd} />
       <div className="task-list" aria-label={GROUP_NAME[group]}>
@@ -441,6 +476,7 @@ function TaskArea({
             onToggle={onToggle}
             onTogglePriority={onTogglePriority}
             onEdit={onEdit}
+            onExpectedDateChange={onExpectedDateChange}
             onMove={onMove}
             onDelete={onDelete}
             onDragStart={(g, id) => setDragged({ group: g, id })}
@@ -470,11 +506,11 @@ function TaskArea({
 }
 
 // ===== TaskInput 组件 =====
-function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, title: string) => boolean }) {
+function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, title: string) => Promise<boolean> }) {
   const [value, setValue] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  function submit() {
-    if (onAdd(group, value)) setValue("");
+  async function submit() {
+    if (await onAdd(group, value)) setValue("");
     requestAnimationFrame(() => input.current?.focus());
   }
   return (
@@ -486,7 +522,7 @@ function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, title
         maxLength={200}
         placeholder={`添加${GROUP_NAME[group].replace("安排", "")}事项`}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); }}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) void submit(); }}
       />
       <small>{value.length ? `${value.length}/200` : "↵"}</small>
     </div>
@@ -500,6 +536,7 @@ function TaskRow({
   onToggle,
   onTogglePriority,
   onEdit,
+  onExpectedDateChange,
   onMove,
   onDelete,
   onDragStart,
@@ -510,7 +547,8 @@ function TaskRow({
   group: Group;
   onToggle: (task: Task) => void;
   onTogglePriority: (task: Task) => void;
-  onEdit: (task: Task, title: string) => boolean;
+  onEdit: (task: Task, title: string) => Promise<boolean>;
+  onExpectedDateChange?: (task: Task, value: string) => void;
   onMove: (from: Group, taskId: string, to: Group, beforeId?: string) => void;
   onDelete: (group: Group, taskId: string) => void;
   onDragStart: (group: Group, id: string) => void;
@@ -540,8 +578,8 @@ function TaskRow({
     };
   }, [menuOpen]);
 
-  function save() {
-    if (onEdit(task, draft)) setEditing(false);
+  async function save() {
+    if (await onEdit(task, draft)) setEditing(false);
     else setDraft(task.title);
   }
 
@@ -574,9 +612,9 @@ function TaskRow({
             value={draft}
             maxLength={200}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={save}
+            onBlur={() => void save()}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) save();
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) void save();
               if (e.key === "Escape") { setDraft(task.title); setEditing(false); }
             }}
           />
@@ -584,11 +622,20 @@ function TaskRow({
           <div className="task-copy-line">
             <span onDoubleClick={() => setEditing(true)}>{task.title}</span>
             {task.is_p0 && <em className="priority-tag">P0</em>}
-            {task.is_legacy && <em>{group === "week" ? "上周遗留" : "昨日遗留"}</em>}
+            {task.is_overdue && <em>已逾期{task.expected_completion_date ? ` · ${formatExpectedDate(task.expected_completion_date)}` : ""}</em>}
           </div>
         )}
       </div>
-      {group === "today" && !task.is_completed && (
+      {(group === "later" || task.expected_completion_date) && !task.is_completed && onExpectedDateChange && (
+        <input
+          className={`task-date-input ${task.expected_completion_date ? "" : "empty"}`}
+          type="date"
+          value={task.expected_completion_date ?? ""}
+          onChange={(e) => onExpectedDateChange(task, e.target.value)}
+          aria-label={`设置${task.title}的预计完成日期`}
+        />
+      )}
+      {!task.is_completed && (
         <button
           className={`priority-button ${task.is_p0 ? "active" : ""}`}
           onClick={() => onTogglePriority(task)}
@@ -622,6 +669,11 @@ function TaskRow({
       <span className="grip" aria-hidden>⠿</span>
     </article>
   );
+}
+
+function formatExpectedDate(value: string) {
+  const [, month, day] = value.split("-");
+  return `${Number(month)}/${Number(day)}`;
 }
 
 // ===== Modal 组件 =====
@@ -681,7 +733,7 @@ function CompletionHistory({ history }: { history: Task[] }) {
                   <span aria-hidden>✓</span>
                   <div className="history-item-title">{item.title}</div>
                   <small>
-                    {GROUP_NAME[item.area]} ·{" "}
+                    {item.expected_completion_date ? `原计划 ${formatExpectedDate(item.expected_completion_date)} · ` : ""}
                     {item.completed_at
                       ? new Date(item.completed_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
                       : ""}

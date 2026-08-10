@@ -152,7 +152,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
                 <button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
                 <button className="board-card-main" onClick={() => openEditor(item.id)}>
                   <strong><HighlightText text={item.title} query="" /></strong>
-                  <span>{item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ") || "开始添加内容"}</span>
+                  <span>{item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ") || item.plainText?.split("\n").slice(0, 2).join(" ").slice(0, 60) || "开始添加内容"}</span>
                   <small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small>
                 </button>
                 <button className="board-card-more" aria-label={`操作${item.title}`} aria-expanded={resourceMenu?.id === item.id} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setResourceMenu((current) => current?.id === item.id ? null : { id: item.id, top: rect.bottom + 4, left: Math.max(8, rect.right - 112) }); }}>···</button>
