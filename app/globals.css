@@ -195,6 +195,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .task-date-input.empty { width: 30px; color: transparent; }
 .task-date-input.empty::-webkit-datetime-edit { display: none; }
 .task-period-select { height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--violet-6); border-radius: 8px; background: rgba(255,255,255,.72); color: var(--violet-12); font: inherit; font-size: 12px; }
+.task-date-icon, .task-date-label { flex: 0 0 auto; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--violet-11); }
+.task-date-icon { width: 18px; height: 24px; display: inline-grid; place-items: center; margin-left: -1px; }
+.task-date-icon:hover, .task-date-label.task-date-trigger:hover { color: var(--violet-12); }
+.task-copy-line > .task-date-label, .task-date-label { font-size: 12px; font-weight: 650; line-height: 1; white-space: nowrap; }
+.task-date-picker { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.task-period-menu-wrap { position: relative; }
+.task-period-trigger { min-width: 48px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; padding-inline: 2px; }
+.task-period-menu { top: 32px; right: 0; width: max-content; min-width: 88px; padding: 4px; }
+.task-period-menu button { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
+.task-period-menu button.active { color: var(--violet-11); font-weight: 700; }
 .more { font-size: 13px; font-weight: 500; letter-spacing: -.6px; }
 .priority-button + .menu-wrap { margin-left: -3px; }
 .menu-wrap { position: relative; }
@@ -1079,7 +1089,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 12px;
   font-weight: 650;
 }
-.history-button:hover { color: var(--violet-12); text-decoration: underline; text-underline-offset: 3px; }
+.history-button { text-decoration: underline; text-underline-offset: 3px; }
+.history-button:hover { color: var(--violet-12); }
 .area-header-actions { display: flex; align-items: center; gap: 10px; }
 .completion-history { min-height: min(680px, calc(100vh - 44px)); padding: 30px; background: var(--paper); }
 .completion-history > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-right: 50px; }

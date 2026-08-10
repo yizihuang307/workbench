@@ -10,6 +10,7 @@ import { addCompletion, cleanCompletionHistory, completionsForDay, completionsFo
 import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
 import { calendarDate, getRolloverDecision, isIsoDate, isTaskInPeriod, isTaskVisibleInSchedule, type TaskPeriod } from "@/lib/task-period";
+import { CalendarDays, Check, ChevronDown } from "lucide-react";
 
 type Group = "today" | "later";
 type Task = {
@@ -484,6 +485,23 @@ function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured =
   group: Group; tasks: Task[]; onExpand: () => void; onOpenHistory?: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
 }) {
   const [period, setPeriod] = useState<TaskPeriod>("all");
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const periodMenu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!periodOpen) return;
+    function close(event: PointerEvent) {
+      if (!periodMenu.current?.contains(event.target as Node)) setPeriodOpen(false);
+    }
+    function closeWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setPeriodOpen(false);
+    }
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, [periodOpen]);
   const activeTasks = useMemo(() => tasks.filter((task) => isTaskVisibleInSchedule({
     area: group,
     isCompleted: task.done,
@@ -494,11 +512,20 @@ function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured =
   const periodTasks = useMemo(() => group === "later" ? activeTasks.filter((task) => isTaskInPeriod(task, period)) : activeTasks, [activeTasks, group, period]);
   const shown = useMemo(() => actions.hideDone ? periodTasks.filter((task) => !task.done) : periodTasks, [actions.hideDone, periodTasks]);
   const complete = activeTasks.filter((task) => task.done).length;
+  const periodNames: Record<TaskPeriod, string> = { all: "全部", "this-week": "本周", "next-week": "下周", "this-month": "本月" };
   return <section className={`task-area ${group === "later" ? "area-week" : `area-${group}`} ${featured || (group === "later" && !expanded) ? "featured" : ""} ${expanded ? "expanded" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
     <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日</p>}</div></div>
-      {group === "later" && <select value={period} onChange={(event) => setPeriod(event.target.value as TaskPeriod)} aria-label="筛选后续安排"><option value="all">全部</option><option value="this-week">本周</option><option value="next-week">下周</option><option value="this-month">本月</option></select>}
-      {!expanded && <div className="area-header-actions">{group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}<button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button></div>}
+      <div className="area-header-actions">
+        {group === "later" && <div className="task-period-menu-wrap" ref={periodMenu}>
+          <button className="history-button task-period-trigger" onClick={() => setPeriodOpen((open) => !open)} aria-haspopup="menu" aria-expanded={periodOpen} aria-label="筛选后续安排"><span>{periodNames[period]}</span><ChevronDown size={13} strokeWidth={1.8} aria-hidden /></button>
+          {periodOpen && <div className="task-menu task-period-menu" role="menu">
+            {(Object.keys(periodNames) as TaskPeriod[]).map((value) => <button key={value} className={period === value ? "active" : ""} onClick={() => { setPeriod(value); setPeriodOpen(false); }}>{periodNames[value]}{period === value && <Check size={13} aria-hidden />}</button>)}
+          </div>}
+        </div>}
+        {group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}
+        {!expanded && <button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button>}
+      </div>
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
     <div className="task-list" aria-label={GROUP_NAME[group]}>
@@ -519,10 +546,10 @@ function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, value
 
 function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group: Group }) {
   const [editing, setEditing] = useState(false);
-  const [editingDate, setEditingDate] = useState(false);
   const [draft, setDraft] = useState(task.label);
   const [menuOpen, setMenuOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const dateInput = useRef<HTMLInputElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
   useEffect(() => {
@@ -541,20 +568,29 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
     };
   }, [menuOpen]);
   function save() { if (actions.editTask(group, task.id, draft)) setEditing(false); else setDraft(task.label); }
-  return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing && !editingDate}
+  function openDatePicker() {
+    const picker = dateInput.current;
+    if (!picker) return;
+    picker.showPicker();
+  }
+  return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing}
     onDragStart={() => actions.setDragged({ group, id: task.id })} onDragEnd={() => actions.setDragged(null)}
     onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group, task.id); actions.setDragged(null); }}>
     <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
     <div className="task-copy">
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
-        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line"><span onDoubleClick={() => setEditing(true)}>{task.label}</span>{task.priority && <em className="priority-tag">P0</em>}{task.isOverdue && !task.done && <em>{task.expectedCompletionDate ? `已逾期 · ${formatExpectedDate(task.expectedCompletionDate)}` : "已逾期"}</em>}</div>}
+        onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line">
+        <span onDoubleClick={() => setEditing(true)}>{task.label}</span>
+        {task.expectedCompletionDate
+            ? task.done
+              ? <span className="task-date-label">{formatExpectedDate(task.expectedCompletionDate)}</span>
+              : <button className="task-date-label task-date-trigger" onClick={openDatePicker} aria-label={`修改${task.label}的预计完成日期`}>{formatExpectedDate(task.expectedCompletionDate)}</button>
+            : !task.done && <button className="task-date-icon" onClick={openDatePicker} aria-label={`设置${task.label}的预计完成日期`} title="设置预计完成日期"><CalendarDays size={15} strokeWidth={1.8} aria-hidden /></button>}
+        {!task.done && <input ref={dateInput} className="task-date-picker" type="date" value={task.expectedCompletionDate || ""} tabIndex={-1} aria-hidden onChange={(event) => actions.setExpectedCompletionDate(group, task.id, event.target.value)} />}
+        {task.priority && <em className="priority-tag">P0</em>}
+        {task.isOverdue && !task.done && <em>已逾期</em>}
+      </div>}
     </div>
-    {editingDate
-      ? <input type="date" value={task.expectedCompletionDate || ""} autoFocus aria-label={`设置${task.label}的预计完成日期`} onBlur={() => setEditingDate(false)} onChange={(event) => { actions.setExpectedCompletionDate(group, task.id, event.target.value); setEditingDate(false); }} />
-      : task.expectedCompletionDate
-        ? <button onClick={() => setEditingDate(true)} aria-label={`修改${task.label}的预计完成日期`}>{formatExpectedDate(task.expectedCompletionDate)}</button>
-        : <button onClick={() => setEditingDate(true)} aria-label={`设置${task.label}的预计完成日期`} title="设置预计完成日期">📅</button>}
-    {task.expectedCompletionDate && <button onClick={() => actions.setExpectedCompletionDate(group, task.id, "")} aria-label={`清除${task.label}的预计完成日期`}>×</button>}
     {!task.done && <button className={`priority-button ${task.priority ? "active" : ""}`} onClick={() => actions.togglePriority(group, task.id)} aria-label={task.priority ? "取消 P0" : "标记为 P0"} aria-pressed={task.priority}><span aria-hidden /></button>}
     <div className="menu-wrap" ref={menu}><button className="more" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-label={`操作${task.label}`}>···</button>
       {menuOpen && <div className="task-menu" role="menu">

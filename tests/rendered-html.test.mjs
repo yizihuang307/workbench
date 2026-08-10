@@ -67,6 +67,14 @@ test("schedule exposes completion history with daily and weekly views", async ()
   assert.match(page, />完成记录<\/button>/);
   assert.match(page, /className="area-header-actions"/);
   assert.match(page, /type="date"/);
+  assert.match(page, /CalendarDays/);
+  assert.match(page, /ChevronDown/);
+  assert.match(page, /className="task-menu task-period-menu"/);
+  assert.doesNotMatch(page, /<select value=\{period\}/);
+  assert.doesNotMatch(page, /className="task-date-clear"/);
+  assert.match(page, /picker\.showPicker\(\)/);
+  assert.match(page, /task\.done\s*\?\s*<span className="task-date-label"/);
+  assert.match(page, /task\.isOverdue && !task\.done && <em>已逾期<\/em>/);
   assert.match(page, /aria-label="选择完成记录日期"/);
   assert.match(page, /WEEKDAY_SLOGANS\[today\.getDay\(\)\]/);
   assert.match(page, /蓄力开新局，万事皆顺意/);
