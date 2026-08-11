@@ -162,7 +162,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .area-later { background: var(--lemon); }
 .area-header { min-height: 38px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .area-header > div { display: flex; gap: 10px; align-items: start; }
-.area-header h2 { margin: 0; font-size: 17px; font-weight: 800; }
+.area-header > div:first-child, .area-header > div:first-child > div { min-width: 0; flex: 1 1 auto; }
+.area-header h2 { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; margin: 0; font-size: 17px; font-weight: 800; }
 .area-header h2 em { color: #625f58; font-size: 12px; font-style: normal; font-weight: 500; }
 .area-header p { margin: 4px 0 0; color: #5f5b54; font-size: 12px; }
 .icon-button { min-width: 44px; min-height: 44px; margin: -9px -9px 0 0; border: 0; background: transparent; color: var(--cobalt); font-size: 18px; }
@@ -170,7 +171,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .task-input button { width: 44px; align-self: stretch; border: 0; background: transparent; color: var(--cobalt); font-size: 21px; }
 .task-input input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font-size: 14px; }
 .task-input small { padding-right: 12px; color: #69645c; font-size: 11px; }
-.task-list { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.task-list { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; }
 .task-row { position: relative; min-height: 49px; display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #ddd6cb; }
 .task-row[draggable="true"] { cursor: grab; }
 .task-row[draggable="true"]:active { cursor: grabbing; }
@@ -1080,6 +1081,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   }
 }
 
+/* Desktop schedule: fill one viewport and scroll inside task lists. */
+@media (min-width: 901px) {
+  .page {
+    width: min(1440px, calc(100% - 48px));
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-top: clamp(12px, 2.2vh, 22px);
+    padding-bottom: clamp(12px, 2.2vh, 22px);
+  }
+  .page > .hero {
+    min-height: clamp(76px, 12vh, 104px);
+    flex: 0 0 auto;
+    padding-block: clamp(8px, 1.6vh, 15px);
+  }
+  .page > .board {
+    min-height: 0;
+    flex: 1 1 auto;
+    align-items: stretch;
+    margin-top: clamp(8px, 1.5vh, 16px);
+  }
+  .page > .board > .task-area.featured {
+    height: auto;
+    min-height: 0;
+  }
+}
+
 .history-button {
   min-height: 32px;
   padding: 0 4px;
@@ -1091,7 +1121,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .history-button { text-decoration: underline; text-underline-offset: 3px; }
 .history-button:hover { color: var(--violet-12); }
-.area-header-actions { display: flex; align-items: center; gap: 10px; }
+.area-header-actions { min-width: 0; flex: 0 0 auto; align-self: flex-start; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-left: auto; }
 .completion-history { min-height: min(680px, calc(100vh - 44px)); padding: 30px; background: var(--paper); }
 .completion-history > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-right: 50px; }
 .completion-history h2 { margin: 0; font-size: 24px; letter-spacing: -.03em; }

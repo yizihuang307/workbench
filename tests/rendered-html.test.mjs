@@ -84,12 +84,26 @@ test("schedule exposes completion history with daily and weekly views", async ()
   assert.match(page, /className="history-item-title"/);
   assert.match(css, /\.history-list article \{[^}]*grid-template-columns: 24px minmax\(0,1fr\) auto/s);
   assert.match(css, /\.history-list article small \{[^}]*white-space: nowrap/s);
+  assert.match(css, /@media \(min-width: 901px\) \{[\s\S]*\.page \{[\s\S]*height: 100dvh;[\s\S]*overflow: hidden;/);
+  assert.match(css, /\.page > \.board > \.task-area\.featured \{[\s\S]*height: auto;[\s\S]*min-height: 0;/);
+  assert.match(css, /\.task-list \{[^}]*overflow: auto;[^}]*scrollbar-gutter: stable/s);
+  assert.match(css, /\.area-header-actions \{[^}]*flex: 0 0 auto;[^}]*margin-left: auto/s);
   assert.match(page, />按日查看<\/button>/);
   assert.match(page, />按周查看<\/button>/);
   assert.match(page, /addCompletion\(current\.completionHistory/);
   assert.match(page, /removeCompletion\(current\.completionHistory/);
   assert.match(model, /const MAX_HISTORY = 5000/);
   assert.match(css, /\.completion-history/);
+});
+
+test("completion history includes archived completed tasks", async () => {
+  const [stateRoute, completedRoute] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/api/workbench-state/route.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/api/tasks/completed/route.ts", import.meta.url), "utf8")),
+  ]);
+  assert.match(stateRoute, /completedTasksResult[\s\S]*\.eq\("is_completed", true\)/);
+  assert.match(stateRoute, /state\.schedule\.completionHistory\.map\(\(item\) => item\.taskId\)/);
+  assert.doesNotMatch(completedRoute, /\.is\("deleted_at", null\)/);
 });
 
 test("AI organizer fails safely when the server key is absent", async () => {

@@ -182,6 +182,7 @@ async function readState(supabase: Supabase, userId: string) {
   const { timeZone } = await rolloverDueTasks(supabase, userId);
   const [
     tasksResult,
+    completedTasksResult,
     recordCategoriesResult,
     recordsResult,
     linkGroupsResult,
@@ -191,6 +192,7 @@ async function readState(supabase: Supabase, userId: string) {
     preferencesResult,
   ] = await Promise.all([
     supabase.from("tasks").select("*").eq("user_id", userId).is("deleted_at", null).order("sort_key"),
+    supabase.from("tasks").select("*").eq("user_id", userId).eq("is_completed", true).order("completed_at", { ascending: false }),
     supabase.from("record_categories").select("*").eq("user_id", userId).is("deleted_at", null).order("sort_key"),
     supabase.from("records").select("*").eq("user_id", userId).is("deleted_at", null).order("sort_key"),
     supabase.from("link_groups").select("*").eq("user_id", userId).is("deleted_at", null).order("sort_key"),
@@ -201,6 +203,7 @@ async function readState(supabase: Supabase, userId: string) {
   ]);
   const failed = [
     tasksResult,
+    completedTasksResult,
     recordCategoriesResult,
     recordsResult,
     linkGroupsResult,
@@ -211,9 +214,21 @@ async function readState(supabase: Supabase, userId: string) {
   ].find((result) => result.error);
   if (failed?.error) throw failed.error;
 
+  // 兼容旧数据：已完成但缺少 completed_at 的任务，用 updated_at 回填。
+  const rows = tasksResult.data ?? [];
+  const completedRows = completedTasksResult.data ?? [];
+  const missingCompletedAt = completedRows.filter((row) => !row.completed_at && row.updated_at);
+  if (missingCompletedAt.length) {
+    await Promise.all(
+      missingCompletedAt.map((row) =>
+        supabase.from("tasks").update({ completed_at: row.updated_at }).eq("id", row.id).eq("user_id", userId),
+      ),
+    );
+    for (const row of missingCompletedAt) row.completed_at = row.updated_at;
+  }
+
   const taskGroups: Record<"today" | "later", unknown[]> = { today: [], later: [] };
-  const completionHistory: unknown[] = [];
-  for (const row of tasksResult.data ?? []) {
+  for (const row of rows) {
     const area = row.area === "today" ? "today" : "later";
     const task = {
       id: row.id,
@@ -234,15 +249,15 @@ async function readState(supabase: Supabase, userId: string) {
     }, undefined, timeZone, preferencesResult.data?.hide_completed ?? false)) {
       taskGroups[area].push(task);
     }
-    if (row.is_completed && row.completed_at) {
-      completionHistory.push({
-        taskId: row.id,
-        label: row.title,
-        expectedCompletionDate: row.expected_completion_date,
-        completedAt: new Date(row.completed_at).getTime(),
-      });
-    }
   }
+  const completionHistory = completedRows
+    .filter((row) => row.completed_at)
+    .map((row) => ({
+      taskId: row.id,
+      label: row.title,
+      expectedCompletionDate: row.expected_completion_date,
+      completedAt: new Date(row.completed_at).getTime(),
+    }));
 
   const recordCategories = recordCategoriesResult.data ?? [];
   const preferences = preferencesResult.data;
@@ -524,7 +539,12 @@ async function writeState(
   })), userId);
 
   await Promise.all([
-    softDeleteMissing(supabase, "tasks", allTasks.map((item) => item.id), userId),
+    softDeleteMissing(
+      supabase,
+      "tasks",
+      [...new Set([...allTasks.map((item) => item.id), ...state.schedule.completionHistory.map((item) => item.taskId)])],
+      userId,
+    ),
     softDeleteMissing(supabase, "records", state.records.records.map((item) => item.id), userId),
     softDeleteMissing(supabase, "links", state.information.systems.map((item) => item.id), userId),
     softDeleteMissing(supabase, "resources", state.information.resources.map((item) => item.id), userId),

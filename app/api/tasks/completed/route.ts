@@ -14,7 +14,6 @@ export async function GET() {
     .select("*")
     .eq("user_id", userId)
     .eq("is_completed", true)
-    .is("deleted_at", null)
     .order("completed_at", { ascending: false });
 
   if (error) return new AppError("INTERNAL_ERROR", error.message).toResponse(requestId);
