@@ -153,7 +153,7 @@ export default function ResourceBoardView({ store, setStore, storageError, onNot
               {items.map((item) => <article key={item.id} className={`board-card${draggedId === item.id ? " dragging" : ""}`} draggable onDragStart={() => { setDraggedSectionId(null); setDraggedId(item.id); }} onDragEnd={() => { setDraggedId(null); setDropSectionId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); onDropToCard(item); }}><span className="drag-grip" aria-hidden>⠿</span>
                 <button className={`resource-pin ${item.pinned ? "active" : ""}`} onClick={() => setStore((current) => ({ ...current, resources: current.resources.map((resource) => resource.id === item.id ? { ...resource, pinned: !resource.pinned, updatedAt: Date.now() } : resource) }))} aria-label={item.pinned ? "取消置顶" : "置顶"}>{item.pinned ? "★" : "☆"}</button>
                 <button className="board-card-main" onClick={() => openEditor(item.id)}>
-                  <strong><HighlightText text={item.title} query="" /></strong>
+                  <OverflowTitle text={item.title} />
                   <span>{item.blocks.map((block) => block.type === "text" ? block.text : block.type === "link" ? block.domain : block.name).filter(Boolean).join(" · ") || item.plainText?.split("\n").slice(0, 2).join(" ").slice(0, 60) || "开始添加内容"}</span>
                   <small>{new Date(item.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</small>
                 </button>
@@ -191,6 +191,22 @@ function HighlightText({ text, query }: { text: string; query: string }) {
   const needle = query.trim(); if (!needle) return <>{text}</>;
   const parts = text.split(new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"));
   return <>{parts.map((part, index) => part.toLocaleLowerCase() === needle.toLocaleLowerCase() ? <mark key={index}>{part}</mark> : part)}</>;
+}
+
+function OverflowTitle({ text }: { text: string }) {
+  const element = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const node = element.current;
+    if (!node) return;
+    const updateTitle = () => {
+      node.title = node.scrollWidth > node.clientWidth ? text : "";
+    };
+    updateTitle();
+    const observer = new ResizeObserver(updateTitle);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [text]);
+  return <strong ref={element}><HighlightText text={text} query="" /></strong>;
 }
 
 function ResourceWorkspace({ item, sections, saveState, fileBytes, onClose, onDelete, onUpdate, onNotice }: { item: ResourceItem; sections: InfoSection[]; saveState: string; fileBytes: number; onClose: () => void; onDelete: () => void; onUpdate: (updater: (item: ResourceItem) => ResourceItem) => void; onNotice: (message: string) => void }) {
