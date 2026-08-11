@@ -506,7 +506,7 @@ function TaskArea({ group, tasks, onOpenHistory, featured = false, ...actions }:
   const shown = useMemo(() => actions.hideDone ? periodTasks.filter((task) => !task.done) : periodTasks, [actions.hideDone, periodTasks]);
   const complete = activeTasks.filter((task) => task.done).length;
   const periodNames: Record<TaskPeriod, string> = { all: "全部", "this-week": "本周", "next-week": "下周", "this-month": "本月" };
-  return <section className={`task-area ${group === "later" ? "area-week" : `area-${group}`} ${featured ? "featured" : ""}`}
+  return <section className={`task-area area-${group} ${featured ? "featured" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
     <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日</p>}</div></div>
       <div className="area-header-actions">

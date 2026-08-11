@@ -157,6 +157,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .side-areas { min-width: 0; display: grid; gap: 14px; }
 .task-area { min-width: 0; display: flex; flex-direction: column; overflow: visible; border: 1px solid var(--ink); background: var(--paper); }
 .task-area.featured { height: 560px; padding: 20px; }
+.board > .task-area { height: 560px; padding: 20px; }
 .side-areas .task-area { height: 560px; padding: 20px; }
 .area-week { background: var(--lemon); }
 .area-later { background: var(--lemon); }
@@ -764,6 +765,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   box-shadow: inset 0 0 0 1px var(--line), var(--shadow-panel);
 }
 .task-area.featured { height: 560px; padding: 21px; }
+.board > .task-area { height: 560px; padding: 21px; }
 .side-areas { gap: 16px; }
 .side-areas .task-area { height: 560px; padding: 21px; }
 .area-week { background: linear-gradient(145deg, rgba(240,240,255,.92), rgba(231,231,255,.76)); }
@@ -875,7 +877,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .hero { align-items: flex-start; }
   .hero h1 { white-space: normal; }
   .board { grid-template-columns: 1fr; }
-  .task-area.featured, .side-areas .task-area { height: auto; min-height: 300px; }
+  .task-area.featured, .board > .task-area, .side-areas .task-area { height: auto; min-height: 300px; }
   .modal, .info-dialog { border-radius: 18px 18px 0 0; }
 }
 
@@ -1104,7 +1106,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     align-items: stretch;
     margin-top: clamp(8px, 1.5vh, 16px);
   }
-  .page > .board > .task-area.featured {
+  .page > .board > .task-area {
     height: auto;
     min-height: 0;
   }
