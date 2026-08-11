@@ -130,7 +130,7 @@ export default function Home() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
-  const [expanded, setExpanded] = useState<Group | null>(null);
+
   const [quickOpen, setQuickOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleted, setDeleted] = useState<Deleted | null>(null);
@@ -140,7 +140,7 @@ export default function Home() {
   const cloudLoaded = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
-  const expandButtons = useRef<Partial<Record<Group, HTMLButtonElement | null>>>({});
+
 
   useEffect(() => {
     function syncRoute() {
@@ -199,9 +199,9 @@ export default function Home() {
   }, [ready, store, recordStore, infoStore]);
 
   useEffect(() => {
-    document.body.classList.toggle("modal-open", Boolean(expanded || quickOpen || historyOpen));
+    document.body.classList.toggle("modal-open", Boolean(quickOpen || historyOpen));
     return () => document.body.classList.remove("modal-open");
-  }, [expanded, quickOpen, historyOpen]);
+  }, [quickOpen, historyOpen]);
 
   useEffect(() => () => {
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -335,11 +335,7 @@ export default function Home() {
     if (undoTimer.current) clearTimeout(undoTimer.current);
   }
 
-  const closeExpanded = useCallback(() => {
-    const group = expanded;
-    setExpanded(null);
-    requestAnimationFrame(() => group && expandButtons.current[group]?.focus());
-  }, [expanded]);
+
 
   const today = new Date();
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
@@ -390,15 +386,12 @@ export default function Home() {
         </header>
 
         <div className="board">
-          <TaskArea group="today" tasks={store.tasks.today} {...actions} onExpand={() => setExpanded("today")} onOpenHistory={() => setHistoryOpen(true)} expandRef={(node) => { expandButtons.current.today = node; }} featured />
-          <TaskArea group="later" tasks={store.tasks.later} {...actions} onExpand={() => setExpanded("later")} expandRef={(node) => { expandButtons.current.later = node; }} />
+          <TaskArea group="today" tasks={store.tasks.today} {...actions} onOpenHistory={() => setHistoryOpen(true)} featured />
+          <TaskArea group="later" tasks={store.tasks.later} {...actions} />
         </div>
       </div>
     </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} initialSelectedId={detailId} onSelectedChange={(id) => setDetail("records", id)} /></section> : activePage === "links" ? <section className="content"><LinkLibraryView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section> : <section className="content"><ResourceBoardView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} initialEditingId={detailId} onEditingChange={(id) => setDetail("resources", id)} /></section>}
 
-    {expanded && <Modal title={GROUP_NAME[expanded]} onClose={closeExpanded}>
-      <TaskArea group={expanded} tasks={store.tasks[expanded]} {...actions} onExpand={closeExpanded} expanded />
-    </Modal>}
     {historyOpen && <Modal title="完成记录" onClose={() => setHistoryOpen(false)}><CompletionHistory history={store.completionHistory} /></Modal>}
     {quickOpen && <QuickNote categories={recordStore.categories} defaultCategoryId={recordStore.defaultCategoryId} onDefaultChange={(defaultCategoryId) => setRecordStore((current) => ({ ...current, defaultCategoryId }))} onClose={() => setQuickOpen(false)} onSave={(text, categoryId) => {
       setStore((current) => ({ ...current, quickNotes: [...current.quickNotes, { id: id(), text, createdAt: Date.now() }].slice(-100) }));
@@ -481,8 +474,8 @@ type AreaActions = {
   setHideDone: (value: boolean) => void;
 };
 
-function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured = false, expanded = false, ...actions }: AreaActions & {
-  group: Group; tasks: Task[]; onExpand: () => void; onOpenHistory?: () => void; expandRef?: (node: HTMLButtonElement | null) => void; featured?: boolean; expanded?: boolean;
+function TaskArea({ group, tasks, onOpenHistory, featured = false, ...actions }: AreaActions & {
+  group: Group; tasks: Task[]; onOpenHistory?: () => void; featured?: boolean;
 }) {
   const [period, setPeriod] = useState<TaskPeriod>("all");
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -513,7 +506,7 @@ function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured =
   const shown = useMemo(() => actions.hideDone ? periodTasks.filter((task) => !task.done) : periodTasks, [actions.hideDone, periodTasks]);
   const complete = activeTasks.filter((task) => task.done).length;
   const periodNames: Record<TaskPeriod, string> = { all: "全部", "this-week": "本周", "next-week": "下周", "this-month": "本月" };
-  return <section className={`task-area ${group === "later" ? "area-week" : `area-${group}`} ${featured || (group === "later" && !expanded) ? "featured" : ""} ${expanded ? "expanded" : ""}`}
+  return <section className={`task-area ${group === "later" ? "area-week" : `area-${group}`} ${featured ? "featured" : ""}`}
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
     <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日</p>}</div></div>
       <div className="area-header-actions">
@@ -524,7 +517,6 @@ function TaskArea({ group, tasks, onExpand, onOpenHistory, expandRef, featured =
           </div>}
         </div>}
         {group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}
-        {!expanded && <button ref={expandRef} className="icon-button" onClick={onExpand} aria-label={`放大${GROUP_NAME[group]}`} title="放大区域">↗</button>}
       </div>
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
