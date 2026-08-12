@@ -26,7 +26,9 @@ export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublic = pathname === "/login" || pathname.startsWith("/auth/");
   if (!user && !isPublic) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = new URL("/login", request.url);
+    if (pathname.startsWith("/widget/")) loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
   }
   if (user && pathname === "/login") {
     return NextResponse.redirect(new URL("/", request.url));
