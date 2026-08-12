@@ -381,12 +381,14 @@ export default function Home() {
           <div className="hero-intro"><p>{dateLabel}</p><h1>{WEEKDAY_SLOGANS[today.getDay()]}</h1></div>
           <div className="hero-tools">
             {/* 心情模块暂时隐藏：保留 Mood 组件与本地数据，便于后续恢复。 */}
+            <button className="history-button page-action-button" onClick={() => setHistoryOpen(true)}>完成记录</button>
+            <DisplaySettings hideDone={store.hideDone} setHideDone={actions.setHideDone} />
             <button className="quick-button" onClick={() => setQuickOpen(true)}><span className="quick-icon" aria-hidden />快速记录</button>
           </div>
         </header>
 
         <div className="board">
-          <TaskArea group="today" tasks={store.tasks.today} {...actions} onOpenHistory={() => setHistoryOpen(true)} featured />
+          <TaskArea group="today" tasks={store.tasks.today} {...actions} featured />
           <TaskArea group="later" tasks={store.tasks.later} {...actions} />
         </div>
       </div>
@@ -474,8 +476,8 @@ type AreaActions = {
   setHideDone: (value: boolean) => void;
 };
 
-function TaskArea({ group, tasks, onOpenHistory, featured = false, ...actions }: AreaActions & {
-  group: Group; tasks: Task[]; onOpenHistory?: () => void; featured?: boolean;
+function TaskArea({ group, tasks, featured = false, ...actions }: AreaActions & {
+  group: Group; tasks: Task[]; featured?: boolean;
 }) {
   const [period, setPeriod] = useState<TaskPeriod>("all");
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -516,7 +518,6 @@ function TaskArea({ group, tasks, onOpenHistory, featured = false, ...actions }:
             {(Object.keys(periodNames) as TaskPeriod[]).map((value) => <button key={value} className={period === value ? "active" : ""} onClick={() => { setPeriod(value); setPeriodOpen(false); }}>{periodNames[value]}{period === value && <Check size={13} aria-hidden />}</button>)}
           </div>}
         </div>}
-        {group === "today" && onOpenHistory && <button className="history-button" onClick={onOpenHistory}>完成记录</button>}
       </div>
     </header>
     <TaskInput group={group} onAdd={actions.addTask} />
@@ -524,8 +525,37 @@ function TaskArea({ group, tasks, onOpenHistory, featured = false, ...actions }:
       {shown.map((task) => <TaskRow key={task.id} task={task} group={group} {...actions} />)}
       {!shown.length && <div className="empty"><b>✓</b><span>{actions.hideDone && activeTasks.length ? "完成项已隐藏" : "这里还没有安排"}</span></div>}
     </div>
-    {featured && <footer className="progress"><span>{complete} / {activeTasks.length} 已完成</span><i><b style={{ width: `${activeTasks.length ? complete / activeTasks.length * 100 : 0}%` }} /></i><label><input type="checkbox" checked={actions.hideDone} onChange={(event) => actions.setHideDone(event.target.checked)} /> 隐藏已完成</label></footer>}
+    {featured && <footer className="progress"><span>{complete} / {activeTasks.length} 已完成</span><i><b style={{ width: `${activeTasks.length ? complete / activeTasks.length * 100 : 0}%` }} /></i></footer>}
   </section>;
+}
+
+function DisplaySettings({ hideDone, setHideDone }: { hideDone: boolean; setHideDone: (value: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const menu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function close(event: PointerEvent) {
+      if (!menu.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function closeWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, [open]);
+  return <div className="page-settings-wrap" ref={menu}>
+    <button className="history-button page-action-button" onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open}>
+      显示设置<ChevronDown size={13} strokeWidth={1.8} aria-hidden />
+    </button>
+    {open && <div className="task-menu page-settings-popover" role="menu">
+      <strong>显示设置</strong>
+      <label><input type="checkbox" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />隐藏已完成</label>
+    </div>}
+  </div>;
 }
 
 function TaskInput({ group, onAdd }: { group: Group; onAdd: (group: Group, value: string) => boolean }) {

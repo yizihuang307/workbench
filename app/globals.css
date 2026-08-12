@@ -130,7 +130,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .hero p { margin: 0 0 7px; color: var(--cobalt); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
 .hero-intro > p { font-size: 14px; }
 .hero h1 { margin: 0; font-size: clamp(25px, 2.35vw, 34px); line-height: 1.2; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; }
-.hero-tools { display: flex; align-items: flex-end; gap: 12px; }
+.hero-tools { display: flex; align-items: center; gap: 12px; }
 .mood-block small { display: block; margin-bottom: 7px; color: #666158; font-size: 12px; text-align: left; }
 .moods { display: flex; border: 1px solid var(--line); background: var(--paper); }
 .moods button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-right: 1px solid #e7e0d5; background: transparent; color: var(--muted); }
@@ -221,7 +221,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .progress { min-height: 44px; display: flex; align-items: center; gap: 12px; padding-top: 8px; color: #69645c; font-size: 12px; }
 .progress > i { flex: 1; height: 4px; overflow: hidden; background: #e9e3da; }
 .progress > i > b { display: block; height: 100%; background: var(--cobalt); }
-.progress label { min-height: 44px; display: flex; align-items: center; gap: 5px; }
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 22px; background: rgba(24,22,19,.55); }
 .modal { position: relative; width: min(880px, 100%); max-height: min(820px, calc(100vh - 44px)); overflow: auto; border: 1px solid var(--ink); background: var(--ivory); box-shadow: 12px 12px 0 rgba(0,0,0,.22); }
 .modal-close { position: sticky; z-index: 30; top: 10px; float: right; width: 44px; height: 44px; margin: 10px 10px -54px 0; border: 1px solid var(--ink); background: var(--paper); font-size: 22px; }
@@ -354,12 +353,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .page { width: auto; padding: 16px 14px 34px; }
   .hero { display: block; padding: 10px 0 16px; }
   .hero h1 { font-size: clamp(21px, 6.2vw, 28px); white-space: nowrap; }
-  .hero-tools { margin-top: 16px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; justify-content: stretch; }
+  .hero-tools { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: stretch; justify-content: flex-end; }
   .mood-block { min-width: 0; }
   .mood-block small { text-align: left; }
   .moods { width: 100%; }
   .moods button { min-width: 40px; min-height: 42px; flex: 1; }
-  .quick-button { grid-column: 2; min-height: 42px; white-space: nowrap; }
+  .quick-button { white-space: nowrap; }
   .board, .side-areas { display: grid; grid-template-columns: 1fr; }
   .task-area.featured, .side-areas .task-area { height: 430px; padding: 17px; }
   .progress { flex-wrap: wrap; }
@@ -1123,6 +1122,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .history-button { text-decoration: underline; text-underline-offset: 3px; }
 .history-button:hover { color: var(--violet-12); }
+.page-action-button {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding-inline: 10px;
+  border-radius: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.page-action-button:hover, .page-action-button[aria-expanded="true"] { background: var(--violet-3); }
+.page-settings-wrap { position: relative; align-self: stretch; display: flex; }
+.page-settings-popover { top: calc(100% + 6px); right: 0; width: 152px; padding: 10px; gap: 8px; }
+.page-settings-popover > strong { padding: 0 4px; color: var(--violet-12); font-size: 12px; }
+.page-settings-popover > label { min-height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 4px; color: var(--ink); font-size: 13px; cursor: pointer; }
+.page-settings-popover input { accent-color: var(--violet-9); }
 .area-header-actions { min-width: 0; flex: 0 0 auto; align-self: flex-start; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-left: auto; }
 .completion-history { min-height: min(680px, calc(100vh - 44px)); padding: 30px; background: var(--paper); }
 .completion-history > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-right: 50px; }
