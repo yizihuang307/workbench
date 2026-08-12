@@ -1,5 +1,6 @@
-import type { AnimationData } from "lottie-web";
+import type { AnimationConfigWithData } from "lottie-web";
 
+type AnimationData = AnimationConfigWithData["animationData"];
 const animationCache = new Map<string, Promise<AnimationData>>();
 
 export const CAT_ANIMATION_PATHS = [
