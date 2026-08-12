@@ -5,6 +5,8 @@ import RecordsView from "./records-view";
 import { emptyRecordStore, recordId, type RecordStore } from "./records";
 import LinkLibraryView from "./link-library-view";
 import ResourceBoardView from "./resource-board-view";
+import SidebarCat from "./sidebar-cat";
+import TaskCompletionEffect from "./task-completion-effect";
 import { emptyInfoStore, type InfoStore } from "./information";
 import { addCompletion, cleanCompletionHistory, completionsForDay, completionsForWeek, dayStart, removeCompletion, weekStart, type CompletionRecord } from "./completion-history";
 import { createClient } from "@/lib/supabase/client";
@@ -133,6 +135,7 @@ export default function Home() {
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [celebration, setCelebration] = useState<{ x: number; y: number; runId: number } | null>(null);
   const [deleted, setDeleted] = useState<Deleted | null>(null);
   const [dragged, setDragged] = useState<{ group: Group; id: string } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -242,6 +245,19 @@ export default function Home() {
     });
   }
 
+  function triggerCelebration(origin: { x: number; y: number }) {
+    const halfSize = 130;
+    setCelebration({
+      x: Math.min(window.innerWidth - halfSize, Math.max(halfSize, origin.x)),
+      y: Math.min(window.innerHeight - halfSize, Math.max(halfSize, origin.y)),
+      runId: Date.now(),
+    });
+  }
+
+  const clearCelebration = useCallback((runId: number) => {
+    setCelebration((current) => current?.runId === runId ? null : current);
+  }, []);
+
   function togglePriority(group: Group, taskId: string) {
     updateTasks((tasks) => ({ ...tasks, [group]: tasks[group].map((task) => task.id === taskId ? { ...task, priority: !task.priority } : task) }));
   }
@@ -339,7 +355,7 @@ export default function Home() {
 
   const today = new Date();
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(today).replace("星期", " · 星期");
-  const actions = { addTask, toggleTask, togglePriority, editTask, setExpectedCompletionDate, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
+  const actions = { addTask, toggleTask, triggerCelebration, togglePriority, editTask, setExpectedCompletionDate, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
 
   async function handleLogout() {
     await createClient().auth.signOut();
@@ -373,6 +389,7 @@ export default function Home() {
         <button className={activePage === "resources" ? "active" : ""} onClick={() => navigate("resources")}><span aria-hidden>📚</span>资料库</button>
         {/* 心情模块暂时隐藏：恢复时重新启用导航入口。 */}
       </nav>
+      <SidebarCat />
     </aside>
 
     {activePage === "schedule" ? <section className="content">
@@ -395,6 +412,7 @@ export default function Home() {
     </section> : activePage === "records" ? <section className="content"><RecordsView store={recordStore} setStore={setRecordStore} storageError={recordStorageError} onNotice={setNotice} initialSelectedId={detailId} onSelectedChange={(id) => setDetail("records", id)} /></section> : activePage === "links" ? <section className="content"><LinkLibraryView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} /></section> : <section className="content"><ResourceBoardView store={infoStore} setStore={setInfoStore} storageError={infoStorageError} onNotice={setNotice} initialEditingId={detailId} onEditingChange={(id) => setDetail("resources", id)} /></section>}
 
     {historyOpen && <Modal title="完成记录" onClose={() => setHistoryOpen(false)}><CompletionHistory history={store.completionHistory} /></Modal>}
+    {celebration && <TaskCompletionEffect {...celebration} onComplete={clearCelebration} />}
     {quickOpen && <QuickNote categories={recordStore.categories} defaultCategoryId={recordStore.defaultCategoryId} onDefaultChange={(defaultCategoryId) => setRecordStore((current) => ({ ...current, defaultCategoryId }))} onClose={() => setQuickOpen(false)} onSave={(text, categoryId) => {
       setStore((current) => ({ ...current, quickNotes: [...current.quickNotes, { id: id(), text, createdAt: Date.now() }].slice(-100) }));
       const now = Date.now();
@@ -465,6 +483,7 @@ function CompletionHistory({ history }: { history: CompletionRecord[] }) {
 type AreaActions = {
   addTask: (group: Group, label: string) => boolean;
   toggleTask: (group: Group, id: string) => void;
+  triggerCelebration: (origin: { x: number; y: number }) => void;
   togglePriority: (group: Group, id: string) => void;
   editTask: (group: Group, id: string, label: string) => boolean;
   setExpectedCompletionDate: (group: Group, id: string, value: string) => void;
@@ -598,7 +617,11 @@ function TaskRow({ task, group, ...actions }: AreaActions & { task: Task; group:
   return <article className={`task-row ${task.done ? "done" : ""} ${task.priority ? "priority" : ""}`} draggable={!editing}
     onDragStart={() => actions.setDragged({ group, id: task.id })} onDragEnd={() => actions.setDragged(null)}
     onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.stopPropagation(); if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group, task.id); actions.setDragged(null); }}>
-    <button className="check" onClick={() => actions.toggleTask(group, task.id)} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
+    <button className="check" onClick={(event) => {
+      const rect = event.currentTarget.closest<HTMLElement>(".task-row")?.getBoundingClientRect();
+      if (!task.done && rect) actions.triggerCelebration({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      actions.toggleTask(group, task.id);
+    }} aria-label={task.done ? `恢复${task.label}` : `完成${task.label}`} aria-pressed={task.done}>✓</button>
     <div className="task-copy">
       {editing ? <input ref={input} className="edit-input" value={draft} maxLength={200} onChange={(event) => setDraft(event.target.value)}
         onBlur={save} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) save(); if (event.key === "Escape") { setDraft(task.label); setEditing(false); } }} /> : <div className="task-copy-line">
