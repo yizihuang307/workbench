@@ -65,6 +65,13 @@ test("schedule exposes completion history with daily and weekly views", async ()
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(page, />完成记录<\/button>/);
+  assert.match(page, /完成记录<\/button>[\s\S]*<DisplaySettings[\s\S]*快速记录<\/button>/);
+  assert.match(page, /function DisplaySettings/);
+  assert.match(page, /aria-haspopup="menu" aria-expanded=\{open\}/);
+  assert.match(page, /if \(event\.key === "Escape"\) setOpen\(false\)/);
+  assert.match(page, /type="checkbox" checked=\{hideDone\}/);
+  assert.doesNotMatch(page, /onOpenHistory/);
+  assert.doesNotMatch(page, /className="progress"[^\n]*<label/);
   assert.match(page, /className="area-header-actions"/);
   assert.match(page, /type="date"/);
   assert.match(page, /CalendarDays/);
@@ -85,9 +92,13 @@ test("schedule exposes completion history with daily and weekly views", async ()
   assert.match(css, /\.history-list article \{[^}]*grid-template-columns: 24px minmax\(0,1fr\) auto/s);
   assert.match(css, /\.history-list article small \{[^}]*white-space: nowrap/s);
   assert.match(css, /@media \(min-width: 901px\) \{[\s\S]*\.page \{[\s\S]*height: 100dvh;[\s\S]*overflow: hidden;/);
-  assert.match(css, /\.page > \.board > \.task-area\.featured \{[\s\S]*height: auto;[\s\S]*min-height: 0;/);
+  assert.match(css, /\.board > \.task-area \{[^}]*height: 560px;[^}]*padding: 21px;/s);
+  assert.match(css, /\.page > \.board > \.task-area \{[\s\S]*height: auto;[\s\S]*min-height: 0;/);
+  assert.match(page, /className=\{`task-area area-\$\{group\}/);
   assert.match(css, /\.task-list \{[^}]*overflow: auto;[^}]*scrollbar-gutter: stable/s);
   assert.match(css, /\.area-header-actions \{[^}]*flex: 0 0 auto;[^}]*margin-left: auto/s);
+  assert.match(css, /\.page-action-button:hover, \.page-action-button\[aria-expanded="true"\] \{ background: var\(--violet-3\); \}/);
+  assert.match(css, /\.page-settings-popover/);
   assert.match(page, />按日查看<\/button>/);
   assert.match(page, />按周查看<\/button>/);
   assert.match(page, /addCompletion\(current\.completionHistory/);
@@ -104,6 +115,68 @@ test("completion history includes archived completed tasks", async () => {
   assert.match(stateRoute, /completedTasksResult[\s\S]*\.eq\("is_completed", true\)/);
   assert.match(stateRoute, /state\.schedule\.completionHistory\.map\(\(item\) => item\.taskId\)/);
   assert.doesNotMatch(completedRoute, /\.is\("deleted_at", null\)/);
+});
+
+test("completing a task launches the preloaded local firework at its row center", async () => {
+  const [page, effect, assets, css, animation] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/task-completion-effect.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/lottie-assets.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../public/firework.json", import.meta.url), "utf8")),
+  ]);
+  assert.match(page, /rect\.left \+ rect\.width \/ 2/);
+  assert.match(page, /rect\.top \+ rect\.height \/ 2/);
+  assert.match(page, /if \(!task\.done && rect\) actions\.triggerCelebration/);
+  assert.match(assets, /FIREWORK_ANIMATION_PATH = "\/firework\.json"/);
+  assert.match(effect, /loadAnimationData\(FIREWORK_ANIMATION_PATH\)/);
+  assert.match(effect, /animationData,/);
+  assert.match(effect, /prefers-reduced-motion: reduce/);
+  assert.match(css, /\.task-completion-effect \{[^}]*position: fixed;[^}]*pointer-events: none/s);
+  assert.match(animation, /"nm":"fireworks_display/);
+});
+
+test("sidebar cat preloads, reuses and cycles through three local animations", async () => {
+  const [page, cat, assets, css, love, laugh, cry] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/sidebar-cat.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/lottie-assets.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../public/cats/love.json", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../public/cats/laugh.json", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../public/cats/cry.json", import.meta.url), "utf8")),
+  ]);
+  assert.match(page, /<SidebarCat \/>/);
+  assert.match(assets, /"\/cats\/love\.json"/);
+  assert.match(assets, /"\/cats\/laugh\.json"/);
+  assert.match(assets, /"\/cats\/cry\.json"/);
+  assert.match(cat, /爱心猫[\s\S]*大笑猫[\s\S]*哭泣猫/);
+  assert.match(cat, /\(current \+ 1\) % CATS\.length/);
+  assert.match(cat, /preloadLottieAnimations\(\[\.\.\.CAT_ANIMATION_PATHS, FIREWORK_ANIMATION_PATH\]\)/);
+  assert.match(cat, /animations\.current\[index\] = animation/);
+  assert.match(cat, /animation\.goToAndPlay\(0, true\)/);
+  assert.match(cat, /loop: !reduceMotion/);
+  assert.match(cat, /prefers-reduced-motion: reduce/);
+  assert.match(css, /\.sidebar-cat \{[^}]*margin-top: auto/s);
+  assert.match(css, /@media \(max-width: 900px\) \{[\s\S]*\.sidebar-cat \{ display: none; \}/);
+  for (const animation of [love, laugh, cry]) {
+    assert.doesNotThrow(() => JSON.parse(animation));
+  }
+});
+
+test("schedule restores a user-scoped cache before cloud revalidation", async () => {
+  const [page, cache] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../lib/workbench-cache.ts", import.meta.url), "utf8")),
+  ]);
+  assert.match(page, /const cloudRequest = loadWorkbenchState/);
+  assert.match(page, /readScheduleCache<Store>\(currentUserId\.current\)/);
+  assert.match(page, /setStore\(normalizeStore\(cached\)\);[\s\S]*setReady\(true\)/);
+  assert.match(page, /const cloud = await cloudRequest;[\s\S]*setStore\(normalizeStore\(cloud\.schedule\)\)/);
+  assert.match(page, /writeScheduleCache\(currentUserId\.current, snapshot\.schedule\)/);
+  assert.match(page, /clearScheduleCache\(currentUserId\.current\)/);
+  assert.match(cache, /workbench:schedule:v1:/);
+  assert.match(cache, /MAX_CACHE_AGE = 7 \* 24 \* 60 \* 60 \* 1000/);
 });
 
 test("AI organizer fails safely when the server key is absent", async () => {
@@ -341,7 +414,11 @@ test("resource board exposes tested manual category and cross-column movement", 
   assert.match(view, /<InformationItemMenu/);
   assert.match(view, /aria-label=\{`上移\$\{section\.name\}`\}/);
   assert.match(view, /aria-label=\{`下移\$\{section\.name\}`\}/);
+  assert.match(view, /<OverflowTitle text=\{item\.title\}/);
+  assert.match(view, /node\.scrollWidth > node\.clientWidth \? text : ""/);
   assert.match(css, /\.board-column\.dragging/);
+  assert.match(css, /\.board-column-body \{[^}]*overflow-x: hidden;[^}]*overflow-y: auto/s);
+  assert.match(css, /\.board-card-main \{[^}]*width: 0;[^}]*min-width: 0;[^}]*overflow: hidden/s);
   assert.match(css, /\.information-item-menu/);
 });
 

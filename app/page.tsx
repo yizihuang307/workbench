@@ -12,6 +12,7 @@ import { addCompletion, cleanCompletionHistory, completionsForDay, completionsFo
 import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
 import { calendarDate, getRolloverDecision, isIsoDate, isTaskInPeriod, isTaskVisibleInSchedule, type TaskPeriod } from "@/lib/task-period";
+import { clearScheduleCache, readScheduleCache, writeScheduleCache } from "@/lib/workbench-cache";
 import { CalendarDays, Check, ChevronDown } from "lucide-react";
 
 type Group = "today" | "later";
@@ -141,6 +142,7 @@ export default function Home() {
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cloudLoaded = useRef(false);
+  const currentUserId = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
 
@@ -158,11 +160,27 @@ export default function Home() {
 
   useEffect(() => {
     void (async () => {
+      const cloudRequest = loadWorkbenchState<Store, RecordStore, InfoStore>();
       try {
-        const cloud = await loadWorkbenchState<Store, RecordStore, InfoStore>();
+        const { data } = await createClient().auth.getSession();
+        currentUserId.current = data.session?.user.id ?? null;
+        if (currentUserId.current) {
+          const cached = readScheduleCache<Store>(currentUserId.current);
+          if (cached) {
+            setStore(normalizeStore(cached));
+            setReady(true);
+          }
+        }
+      } catch {
+        // 无法读取会话缓存时继续加载云端数据。
+      }
+
+      try {
+        const cloud = await cloudRequest;
         setStore(normalizeStore(cloud.schedule));
         setRecordStore(cloud.records);
         setInfoStore(cloud.information);
+        if (currentUserId.current) writeScheduleCache(currentUserId.current, cloud.schedule);
         cloudLoaded.current = true;
       } catch (error) {
         setRecordStorageError(true);
@@ -187,6 +205,7 @@ export default function Home() {
         .catch(() => undefined)
         .then(() => saveWorkbenchState(snapshot))
         .then(() => {
+          if (currentUserId.current) writeScheduleCache(currentUserId.current, snapshot.schedule);
           setRecordStorageError(false);
           setInfoStorageError(false);
         })
@@ -358,6 +377,7 @@ export default function Home() {
   const actions = { addTask, toggleTask, triggerCelebration, togglePriority, editTask, setExpectedCompletionDate, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
 
   async function handleLogout() {
+    if (currentUserId.current) clearScheduleCache(currentUserId.current);
     await createClient().auth.signOut();
     window.location.href = "/login";
   }
