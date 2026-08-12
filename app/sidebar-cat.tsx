@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import lottie from "lottie-web";
 
 const CATS = [
   { name: "爱心猫", path: "/cats/love.json" },
@@ -17,30 +18,23 @@ export default function SidebarCat() {
     const node = container.current;
     if (!node) return;
 
-    let cancelled = false;
     let destroyAnimation: (() => void) | undefined;
 
-    void import("lottie-web").then(({ default: lottie }) => {
-      if (cancelled) return;
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const animation = lottie.loadAnimation({
-        container: node,
-        renderer: "svg",
-        loop: !reduceMotion,
-        autoplay: !reduceMotion,
-        path: cat.path,
-        rendererSettings: { preserveAspectRatio: "xMidYMid meet" },
-      });
-      if (reduceMotion) {
-        animation.addEventListener("DOMLoaded", () => animation.goToAndStop(0, true));
-      }
-      destroyAnimation = () => animation.destroy();
-    }).catch(() => {
-      node.dataset.failed = "true";
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animation = lottie.loadAnimation({
+      container: node,
+      renderer: "svg",
+      loop: !reduceMotion,
+      autoplay: !reduceMotion,
+      path: cat.path,
+      rendererSettings: { preserveAspectRatio: "xMidYMid meet" },
     });
+    if (reduceMotion) {
+      animation.addEventListener("DOMLoaded", () => animation.goToAndStop(0, true));
+    }
+    destroyAnimation = () => animation.destroy();
 
     return () => {
-      cancelled = true;
       destroyAnimation?.();
       node.replaceChildren();
       delete node.dataset.failed;

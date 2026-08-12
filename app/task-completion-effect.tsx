@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import lottie from "lottie-web";
 
 type Props = {
   x: number;
@@ -21,30 +22,25 @@ export default function TaskCompletionEffect({ x, y, runId, onComplete }: Props)
       return;
     }
     const complete = () => onComplete(runId);
-    let cancelled = false;
     let fallback: number | undefined;
     let destroyAnimation: (() => void) | undefined;
-    void import("lottie-web").then(({ default: lottie }) => {
-      if (cancelled) return;
-      const animation = lottie.loadAnimation({
-        container: node,
-        renderer: "svg",
-        loop: false,
-        autoplay: true,
-        path: "/firework.json",
-        rendererSettings: { preserveAspectRatio: "xMidYMid meet" },
-      });
-      animation.addEventListener("complete", complete);
-      animation.addEventListener("data_failed", complete);
-      fallback = window.setTimeout(complete, 3200);
-      destroyAnimation = () => {
-        animation.removeEventListener("complete", complete);
-        animation.removeEventListener("data_failed", complete);
-        animation.destroy();
-      };
-    }).catch(complete);
+    const animation = lottie.loadAnimation({
+      container: node,
+      renderer: "svg",
+      loop: false,
+      autoplay: true,
+      path: "/firework.json",
+      rendererSettings: { preserveAspectRatio: "xMidYMid meet" },
+    });
+    animation.addEventListener("complete", complete);
+    animation.addEventListener("data_failed", complete);
+    fallback = window.setTimeout(complete, 3200);
+    destroyAnimation = () => {
+      animation.removeEventListener("complete", complete);
+      animation.removeEventListener("data_failed", complete);
+      animation.destroy();
+    };
     return () => {
-      cancelled = true;
       if (fallback !== undefined) window.clearTimeout(fallback);
       destroyAnimation?.();
     };
