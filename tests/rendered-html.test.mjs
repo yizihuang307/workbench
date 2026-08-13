@@ -65,8 +65,8 @@ test("schedule exposes completion history with daily and weekly views", async ()
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(page, />完成记录<\/button>/);
-  assert.match(page, />便签模式<\/button>/);
-  assert.match(page, /onOpenSticky=\{async \(\) => \{ const message = await openDesktopWidget\(\)/);
+  assert.doesNotMatch(page, />便签模式<\/button>/);
+  assert.doesNotMatch(page, /onOpenSticky/);
   assert.match(page, /完成记录<\/button>[\s\S]*<DisplaySettings[\s\S]*快速记录<\/button>/);
   assert.match(page, /function DisplaySettings/);
   assert.match(page, /aria-haspopup="menu" aria-expanded=\{open\}/);
@@ -120,7 +120,7 @@ test("completion history includes archived completed tasks", async () => {
 });
 
 test("macOS widget reuses today tasks and completion API", async () => {
-  const [widget, helper, proxy, login, css, swift, page] = await Promise.all([
+  const [widget, helper, proxy, login, css, swift, page, win, pkg] = await Promise.all([
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/widget/today/page.tsx", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/desktop-widget.ts", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../proxy.ts", import.meta.url), "utf8")),
@@ -128,6 +128,8 @@ test("macOS widget reuses today tasks and completion API", async () => {
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../desktop-widget/Sources/TodayWidget/main.swift", import.meta.url), "utf8")),
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../desktop-widget/windows/Program.cs", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../package.json", import.meta.url), "utf8")),
   ]);
   assert.match(widget, /fetch\("\/api\/tasks\?area=today"/);
   assert.match(widget, /method: "PATCH"/);
@@ -165,6 +167,15 @@ test("macOS widget reuses today tasks and completion API", async () => {
   assert.match(swift, /setContentSize\(size\)/);
   assert.match(swift, /setFrameAutosaveName\("TodayWidgetWindow"\)/);
   assert.match(swift, /NWListener\(using: \.tcp, on: 17891\)/);
+  assert.match(widget, /chrome\?\.webview\?\.postMessage/);
+  assert.match(helper, /widget:win/);
+  assert.match(helper, /isWindowsHost/);
+  assert.match(win, /ControlPort = 17891/);
+  assert.match(win, /path == "\/show"/);
+  assert.match(win, /path == "\/reload"/);
+  assert.match(win, /workbench-today/);
+  assert.match(win, /chrome.webview.postMessage/);
+  assert.match(pkg, /"widget:win"/);
 });
 
 test("completing a task launches the preloaded local firework at its row center", async () => {

@@ -12,7 +12,7 @@ import { addCompletion, cleanCompletionHistory, completionsForDay, completionsFo
 import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
 import { calendarDate, getRolloverDecision, isIsoDate, isTaskInPeriod, isTaskVisibleInSchedule, type TaskPeriod } from "@/lib/task-period";
-import { openDesktopWidget, notifyDesktopWidgetRefresh } from "./desktop-widget";
+import { notifyDesktopWidgetRefresh } from "./desktop-widget";
 import { clearScheduleCache, readScheduleCache, writeScheduleCache } from "@/lib/workbench-cache";
 import { CalendarDays, Check, ChevronDown } from "lucide-react";
 
@@ -501,7 +501,7 @@ export default function Home() {
         </header>
 
         <div className="board">
-          <TaskArea group="today" tasks={store.tasks.today} {...actions} featured onOpenSticky={async () => { const message = await openDesktopWidget(); if (message) setNotice(message); }} />
+          <TaskArea group="today" tasks={store.tasks.today} {...actions} featured />
           <TaskArea group="later" tasks={store.tasks.later} {...actions} />
         </div>
       </div>
@@ -591,8 +591,8 @@ type AreaActions = {
   setHideDone: (value: boolean) => void;
 };
 
-function TaskArea({ group, tasks, featured = false, onOpenSticky, ...actions }: AreaActions & {
-  group: Group; tasks: Task[]; featured?: boolean; onOpenSticky?: () => void;
+function TaskArea({ group, tasks, featured = false, ...actions }: AreaActions & {
+  group: Group; tasks: Task[]; featured?: boolean;
 }) {
   const [period, setPeriod] = useState<TaskPeriod>("all");
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -627,7 +627,6 @@ function TaskArea({ group, tasks, featured = false, onOpenSticky, ...actions }: 
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
     <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日</p>}</div></div>
       <div className="area-header-actions">
-        {group === "today" && onOpenSticky && <button className="history-button page-action-button" onClick={onOpenSticky}>便签模式</button>}
         {group === "later" && <div className="task-period-menu-wrap" ref={periodMenu}>
           <button className="history-button task-period-trigger" onClick={() => setPeriodOpen((open) => !open)} aria-haspopup="menu" aria-expanded={periodOpen} aria-label="筛选后续安排"><span>{periodNames[period]}</span><ChevronDown size={13} strokeWidth={1.8} aria-hidden /></button>
           {periodOpen && <div className="task-menu task-period-menu" role="menu">

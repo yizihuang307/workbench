@@ -136,17 +136,18 @@ export default function TodayWidgetPage() {
     window.localStorage.setItem("workbench-widget-opacity-v2", String(next));
   }
 
+  function notifyWidgetHost(value: string) {
+    window.webkit?.messageHandlers?.widget?.postMessage(value);
+    window.chrome?.webview?.postMessage(value);
+  }
+
   function startWidgetDrag(event: React.PointerEvent<HTMLElement>) {
     if ((event.target as HTMLElement).closest("button, a, input, .today-widget-opacity-panel")) return;
-    window.webkit?.messageHandlers?.widget?.postMessage("drag");
+    notifyWidgetHost("drag");
   }
 
   function quitWidget() {
-    const handler = window.webkit?.messageHandlers?.widget;
-    if (handler) {
-      handler.postMessage("quit");
-      return;
-    }
+    notifyWidgetHost("quit");
     void fetch("http://127.0.0.1:17891/quit", { method: "POST" });
   }
 
@@ -198,6 +199,9 @@ declare global {
       messageHandlers?: {
         widget?: { postMessage: (value: string) => void };
       };
+    };
+    chrome?: {
+      webview?: { postMessage: (value: string) => void };
     };
   }
 }

@@ -13,6 +13,8 @@
     "pages:build": "bash scripts/build-pages.sh",
     "pages:preview": "npm run pages:build && wrangler pages dev dist/client --compatibility-date=2025-05-05 --compatibility-flags=nodejs_compat --env-file .env.local",
     "widget:mac": "bash scripts/run-mac-widget.sh",
+    "widget:win": "powershell -ExecutionPolicy Bypass -File scripts/run-win-widget.ps1",
+    "widget": "node scripts/run-desktop-widget.mjs",
     "test": "npm run build && node --import tsx --test tests/*.test.ts && node --test tests/rendered-html.test.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern local-tests",

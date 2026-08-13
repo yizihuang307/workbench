@@ -46,3 +46,6 @@ tsconfig.tsbuildinfo
 /work/
 /desktop-widget/.build/
 /desktop-widget/TodayWidget.app/
+/desktop-widget/windows/bin/
+/desktop-widget/windows/obj/
+/desktop-widget/windows/publish/

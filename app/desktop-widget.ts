@@ -10,8 +10,20 @@ async function postWidget(path: "/show" | "/quit" | "/reload", body?: Record<str
   if (!response.ok) throw new Error("便签服务响应异常");
 }
 
+function isWindowsHost() {
+  const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+  const platform = uaData?.platform || navigator.userAgent;
+  return /Win/i.test(platform);
+}
+
 function launchWidgetApp() {
   window.location.href = WIDGET_SCHEME;
+}
+
+function widgetLaunchHint() {
+  return isWindowsHost()
+    ? "正在打开桌面便签。若未出现，请先在本机运行 npm run widget:win"
+    : "正在打开桌面便签。若未出现，请先在本机运行 npm run widget:mac";
 }
 
 export async function notifyDesktopWidgetRefresh() {
@@ -35,12 +47,15 @@ export async function openDesktopWidget(): Promise<string | null> {
     return null;
   } catch {
     launchWidgetApp();
-    await new Promise((resolve) => window.setTimeout(resolve, 1200));
-    try {
-      await postWidget("/show", payload);
-      return null;
-    } catch {
-      return "正在打开桌面便签。若未出现，请先在本机运行 npm run widget:mac";
+    for (const wait of [800, 1500, 2500]) {
+      await new Promise((resolve) => window.setTimeout(resolve, wait));
+      try {
+        await postWidget("/show", payload);
+        return null;
+      } catch {
+        // WebView2 冷启动较慢，继续等待。
+      }
     }
+    return widgetLaunchHint();
   }
 }
