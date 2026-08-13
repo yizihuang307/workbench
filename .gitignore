@@ -44,3 +44,5 @@ tsconfig.tsbuildinfo
 /.sites-runtime/
 /outputs/
 /work/
+/desktop-widget/.build/
+/desktop-widget/TodayWidget.app/

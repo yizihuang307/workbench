@@ -12,6 +12,7 @@ import { addCompletion, cleanCompletionHistory, completionsForDay, completionsFo
 import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
 import { calendarDate, getRolloverDecision, isIsoDate, isTaskInPeriod, isTaskVisibleInSchedule, type TaskPeriod } from "@/lib/task-period";
+import { openDesktopWidget, notifyDesktopWidgetRefresh } from "./desktop-widget";
 import { clearScheduleCache, readScheduleCache, writeScheduleCache } from "@/lib/workbench-cache";
 import { CalendarDays, Check, ChevronDown } from "lucide-react";
 
@@ -145,6 +146,8 @@ export default function Home() {
   const currentUserId = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const saveInFlight = useRef(false);
+  const applyingRemote = useRef(false);
 
 
   useEffect(() => {
@@ -192,8 +195,60 @@ export default function Home() {
     })();
   }, []);
 
+  const pullRemoteState = useCallback(async () => {
+    if (!cloudLoaded.current || saveInFlight.current || saveTimer.current) return;
+    try {
+      const response = await fetch("/api/tasks?area=today", { cache: "no-store" });
+      const body = await response.json() as {
+        data?: Array<{ id: string; is_completed: boolean; is_p0: boolean; is_overdue: boolean }>;
+      };
+      if (!response.ok || !body.data) return;
+      if (saveInFlight.current || saveTimer.current) return;
+      const remoteById = new Map(body.data.map((item) => [item.id, item]));
+      setStore((current) => {
+        let changed = false;
+        let completionHistory = current.completionHistory;
+        const today = current.tasks.today.map((task) => {
+          const remote = remoteById.get(task.id);
+          if (!remote) return task;
+          const done = Boolean(remote.is_completed);
+          const priority = Boolean(remote.is_p0);
+          const isOverdue = done ? false : Boolean(remote.is_overdue);
+          if (task.done === done && task.priority === priority && task.isOverdue === isOverdue) return task;
+          changed = true;
+          if (done && !task.done) {
+            completionHistory = addCompletion(completionHistory, {
+              taskId: task.id,
+              label: task.label,
+              completedAt: Date.now(),
+              ...(task.expectedCompletionDate ? { expectedCompletionDate: task.expectedCompletionDate } : {}),
+            });
+          } else if (!done && task.done) {
+            completionHistory = removeCompletion(completionHistory, task.id);
+          }
+          return {
+            ...task,
+            done,
+            priority,
+            isOverdue,
+            completedAt: done ? task.completedAt ?? Date.now() : null,
+          };
+        });
+        if (!changed) return current;
+        applyingRemote.current = true;
+        return { ...current, tasks: { ...current.tasks, today }, completionHistory };
+      });
+    } catch {
+      // 后台同步失败时保持当前界面，不打断操作。
+    }
+  }, []);
+
   useEffect(() => {
     if (!ready || !cloudLoaded.current) return;
+    if (applyingRemote.current) {
+      applyingRemote.current = false;
+      return;
+    }
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const snapshot = {
       schedule: { ...store, savedDate: localDate() },
@@ -201,24 +256,45 @@ export default function Home() {
       information: infoStore,
     };
     saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      saveInFlight.current = true;
       saveChain.current = saveChain.current
         .catch(() => undefined)
         .then(() => saveWorkbenchState(snapshot))
         .then(() => {
+          saveInFlight.current = false;
           if (currentUserId.current) writeScheduleCache(currentUserId.current, snapshot.schedule);
           setRecordStorageError(false);
           setInfoStorageError(false);
+          void notifyDesktopWidgetRefresh();
         })
         .catch((error) => {
+          saveInFlight.current = false;
           setRecordStorageError(true);
           setInfoStorageError(true);
           setNotice(error instanceof Error ? error.message : "云端保存失败，请稍后重试");
         });
     }, 600);
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
     };
   }, [ready, store, recordStore, infoStore]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const refresh = () => void pullRemoteState();
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 4_000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+      window.clearInterval(timer);
+    };
+  }, [ready, pullRemoteState]);
 
   useEffect(() => {
     document.body.classList.toggle("modal-open", Boolean(quickOpen || historyOpen));
@@ -425,7 +501,7 @@ export default function Home() {
         </header>
 
         <div className="board">
-          <TaskArea group="today" tasks={store.tasks.today} {...actions} featured />
+          <TaskArea group="today" tasks={store.tasks.today} {...actions} featured onOpenSticky={async () => { const message = await openDesktopWidget(); if (message) setNotice(message); }} />
           <TaskArea group="later" tasks={store.tasks.later} {...actions} />
         </div>
       </div>
@@ -515,8 +591,8 @@ type AreaActions = {
   setHideDone: (value: boolean) => void;
 };
 
-function TaskArea({ group, tasks, featured = false, ...actions }: AreaActions & {
-  group: Group; tasks: Task[]; featured?: boolean;
+function TaskArea({ group, tasks, featured = false, onOpenSticky, ...actions }: AreaActions & {
+  group: Group; tasks: Task[]; featured?: boolean; onOpenSticky?: () => void;
 }) {
   const [period, setPeriod] = useState<TaskPeriod>("all");
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -551,6 +627,7 @@ function TaskArea({ group, tasks, featured = false, ...actions }: AreaActions & 
     onDragOver={(event) => event.preventDefault()} onDrop={() => { if (actions.dragged) actions.moveTask(actions.dragged.group, actions.dragged.id, group); actions.setDragged(null); }}>
     <header className="area-header"><div><div><h2>{GROUP_NAME[group]} <em>共 {activeTasks.length} 项</em></h2>{group === "later" && <p>暂未安排到今日</p>}</div></div>
       <div className="area-header-actions">
+        {group === "today" && onOpenSticky && <button className="history-button page-action-button" onClick={onOpenSticky}>便签模式</button>}
         {group === "later" && <div className="task-period-menu-wrap" ref={periodMenu}>
           <button className="history-button task-period-trigger" onClick={() => setPeriodOpen((open) => !open)} aria-haspopup="menu" aria-expanded={periodOpen} aria-label="筛选后续安排"><span>{periodNames[period]}</span><ChevronDown size={13} strokeWidth={1.8} aria-hidden /></button>
           {periodOpen && <div className="task-menu task-period-menu" role="menu">

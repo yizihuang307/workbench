@@ -65,6 +65,8 @@ test("schedule exposes completion history with daily and weekly views", async ()
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
   ]);
   assert.match(page, />完成记录<\/button>/);
+  assert.match(page, />便签模式<\/button>/);
+  assert.match(page, /onOpenSticky=\{async \(\) => \{ const message = await openDesktopWidget\(\)/);
   assert.match(page, /完成记录<\/button>[\s\S]*<DisplaySettings[\s\S]*快速记录<\/button>/);
   assert.match(page, /function DisplaySettings/);
   assert.match(page, /aria-haspopup="menu" aria-expanded=\{open\}/);
@@ -115,6 +117,54 @@ test("completion history includes archived completed tasks", async () => {
   assert.match(stateRoute, /completedTasksResult[\s\S]*\.eq\("is_completed", true\)/);
   assert.match(stateRoute, /state\.schedule\.completionHistory\.map\(\(item\) => item\.taskId\)/);
   assert.doesNotMatch(completedRoute, /\.is\("deleted_at", null\)/);
+});
+
+test("macOS widget reuses today tasks and completion API", async () => {
+  const [widget, helper, proxy, login, css, swift, page] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/widget/today/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/desktop-widget.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../proxy.ts", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/(auth)/login/page.tsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/globals.css", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../desktop-widget/Sources/TodayWidget/main.swift", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8")),
+  ]);
+  assert.match(widget, /fetch\("\/api\/tasks\?area=today"/);
+  assert.match(widget, /method: "PATCH"/);
+  assert.match(widget, /isCompleted, version: task\.version/);
+  assert.match(widget, /setInterval\(refresh, 8_000\)/);
+  assert.match(widget, /workbench-widget-refresh/);
+  assert.match(widget, /if \(updatingRef\.current\) return/);
+  assert.match(helper, /postWidget\("\/reload"\)/);
+  assert.match(helper, /path: "\/show" \| "\/quit" \| "\/reload"/);
+  assert.match(swift, /POST", request.path == "\/reload"/);
+  assert.match(swift, /didBecomeKeyNotification/);
+  assert.match(page, /notifyDesktopWidgetRefresh/);
+  assert.match(page, /pullRemoteState/);
+  assert.match(page, /fetch\("\/api\/tasks\?area=today"/);
+  assert.match(page, /saveTimer\.current = null;/);
+  assert.match(page, /setInterval\(refresh, 4_000\)/);
+  assert.match(widget, /setDateLabel\(/);
+  assert.match(widget, /today-widget-opacity/);
+  assert.match(widget, /workbench-widget-opacity-v2/);
+  assert.doesNotMatch(widget, /刷新今日安排/);
+  assert.match(widget, /useState\(0\.5\)/);
+  assert.match(css, /border-radius: 18px/);
+  assert.match(css, /--widget-bg-alpha, \.5/);
+  assert.match(swift, /cornerRadius = 18/);
+  assert.doesNotMatch(css, /\.today-widget \{[^}]*backdrop-filter/s);
+  assert.match(widget, /messageHandlers\?\.widget/);
+  assert.match(widget, /startWidgetDrag/);
+  assert.match(swift, /performDrag\(with:/);
+  assert.match(helper, /127\.0\.0\.1:17891/);
+  assert.match(helper, /workbench-today:\/\/show/);
+  assert.match(proxy, /pathname\.startsWith\("\/widget\/"\)/);
+  assert.match(login, /new URLSearchParams\(window\.location\.search\)\.get\("next"\)/);
+  assert.match(css, /\.today-widget \{/);
+  assert.match(swift, /window\.minSize = defaultSize/);
+  assert.match(swift, /setContentSize\(size\)/);
+  assert.match(swift, /setFrameAutosaveName\("TodayWidgetWindow"\)/);
+  assert.match(swift, /NWListener\(using: \.tcp, on: 17891\)/);
 });
 
 test("completing a task launches the preloaded local firework at its row center", async () => {
@@ -460,14 +510,15 @@ test("links and resources use compact manual boards without redundant tabs or so
   assert.match(css, /\.link-column \.system-row \{[^}]*background: #fff/);
 });
 
-test("information hydration and cross-tab sync do not write stale data back", async () => {
+test("workbench auto-syncs remote changes without writing them back immediately", async () => {
   const page = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../app/page.tsx", import.meta.url), "utf8"));
-  assert.doesNotMatch(page, /已同步另一标签页的信息修改/);
-  assert.match(page, /const suppressInfoSave = useRef\(false\)/);
-  assert.match(page, /const infoStoreRef = useRef\(infoStore\)/);
-  assert.match(page, /suppressInfoSave\.current = true; infoStoreRef\.current = parsedInfo; setInfoStore\(parsedInfo\)/);
-  assert.match(page, /if \(suppressInfoSave\.current\) \{ suppressInfoSave\.current = false; return; \}/);
-  assert.match(page, /JSON\.stringify\(parsed\) === JSON\.stringify\(infoStoreRef\.current\)/);
+  assert.match(page, /const applyingRemote = useRef\(false\)/);
+  assert.match(page, /const pullRemoteState = useCallback/);
+  assert.match(page, /if \(applyingRemote\.current\) \{\s*applyingRemote\.current = false;\s*return;/);
+  assert.match(page, /notifyDesktopWidgetRefresh/);
+  assert.match(page, /fetch\("\/api\/tasks\?area=today"/);
+  assert.match(page, /saveTimer\.current = null;/);
+  assert.match(page, /setInterval\(refresh, 4_000\)/);
 });
 
 test("shared information controls match the record interaction pattern", async () => {

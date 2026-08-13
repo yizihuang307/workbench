@@ -28,7 +28,8 @@ export default function LoginPage() {
       setError("注册成功，请先在邮箱中确认账号后再登录");
       return;
     }
-    window.location.href = "/";
+    const next = new URLSearchParams(window.location.search).get("next");
+    window.location.href = next?.startsWith("/") && !next.startsWith("//") ? next : "/";
   }
 
   return (
