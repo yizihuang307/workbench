@@ -50,14 +50,14 @@ jobs:
         working-directory: desktop-app/src-tauri
         run: |
           source $HOME/.cargo/env
-          cargo tauri build --target universal-apple-darwin
+          cargo tauri build --target universal-apple-darwin --bundles dmg
 
       - name: Build Windows (.exe)
         if: matrix.platform == 'windows-latest'
         working-directory: desktop-app/src-tauri
         run: |
           source $HOME/.cargo/env
-          cargo tauri build
+          cargo tauri build --bundles nsis
 
       - name: Upload bundle as workflow artifact
         uses: actions/upload-artifact@v4
