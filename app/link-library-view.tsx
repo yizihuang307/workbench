@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ALL_GROUP, deleteLinkGroup, infoId, moveLink, reorderLinkGroups, safeUrl, siteIcon, UNGROUPED, updateSystemLink, urlMeta, visibleLinks, type InfoStore, type LinkGroup, type SystemItem } from "./information";
 import InformationItemMenu from "./information-item-menu";
+import FaviconImage from "./favicon-image";
 
 type Props = { store: InfoStore; setStore: React.Dispatch<React.SetStateAction<InfoStore>>; storageError: boolean; onNotice: (message: string) => void };
 
@@ -107,7 +108,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
           return <article className={`system-row${draggedId === item.id ? " dragging" : ""}`} key={item.id} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-workbench-link", item.id); setDraggedGroupId(null); setDraggedId(item.id); }} onDragEnd={() => { setDraggedId(null); setDropGroupId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); onDropToItem(event, item); }}>
             <span className="drag-grip" aria-hidden>⠿</span>
             <button className="system-open" onClick={() => openLink(item)} title={item.name}>
-              <b><i aria-hidden>{item.name.slice(0, 1).toUpperCase()}</i>{/^https?:\/\//.test(item.icon) && <img src={item.icon} alt="" onError={(event) => { const fallback = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(target.url).hostname)}&sz=64`; if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback; else event.currentTarget.style.display = "none"; }} />}</b>
+              <b><FaviconImage domain={new URL(target.url).hostname} letter={item.name.slice(0, 1).toUpperCase()} /></b>
               <span><HighlightText text={item.name} query={query} /></span>
               <small><HighlightText text={new URL(target.url).hostname} query={query} /></small>
             </button>
@@ -133,7 +134,7 @@ export default function LinkLibraryView({ store, setStore, storageError, onNotic
     {editingSystem && <SystemEditDialog item={editingSystem} onClose={() => setEditingSystemId(null)} onSave={(name, url) => {
       const normalized = safeUrl(url); if (!normalized) { onNotice("请输入有效的 http/https 网址"); return false; }
       if (store.systems.some((item) => item.id !== editingSystem.id && item.links.some((link) => link.url === normalized))) { onNotice("这个网址已经存在"); return false; }
-      setStore((current) => { const updated = updateSystemLink(current, editingSystem.id, name, normalized); if (!updated) return current; return { ...updated, systems: updated.systems.map((item) => item.id === editingSystem.id ? { ...item, icon: new URL(normalized).origin + "/favicon.ico" } : item) }; });
+      setStore((current) => { const updated = updateSystemLink(current, editingSystem.id, name, normalized); if (!updated) return current; return { ...updated, systems: updated.systems.map((item) => item.id === editingSystem.id ? { ...item, icon: siteIcon(normalized) } : item) }; });
       setEditingSystemId(null); onNotice("链接已更新"); return true;
     }} />}
     {groupManageOpen && <div className="info-dialog-backdrop"><section className="info-dialog" role="dialog" aria-modal="true" aria-label="管理分组">

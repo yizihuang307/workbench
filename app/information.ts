@@ -117,9 +117,10 @@ export function urlMeta(input: string) {
 }
 
 export function siteIcon(url: string, detectedIcon?: string | null) {
-  if (detectedIcon && /^https?:\/\//i.test(detectedIcon)) return detectedIcon;
+  // 统一使用 /api/favicon 代理，绕过国内对 Google favicon 服务的访问限制
+  // detectedIcon 仍保留在数据中用于后续可能的直接引用，但渲染走代理
   const hostname = new URL(url).hostname;
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
+  return `/api/favicon?domain=${encodeURIComponent(hostname)}`;
 }
 
 export function totalFileBytes(store: InfoStore) {
@@ -319,7 +320,7 @@ export function parseInfoStore(raw: string): InfoStore | null {
       if (!links.length) return [];
       seen.add(item.id);
       const rawIcon = typeof item.icon === "string" ? item.icon.trim() : "";
-      const fallbackIcon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(links[0].url).hostname)}&sz=64`;
+      const fallbackIcon = `/api/favicon?domain=${encodeURIComponent(new URL(links[0].url).hostname)}`;
       const icon = /^https?:\/\//i.test(rawIcon) ? safeUrl(rawIcon)?.slice(0, 2048) || fallbackIcon : fallbackIcon;
       const groupId = isV2 && typeof (item as SystemItem).groupId === "string" && linkGroups.some((group) => group.id === (item as SystemItem).groupId) ? (item as SystemItem).groupId : UNGROUPED;
       return [{ id: item.id, sectionId: firstSectionId, groupId, name: item.name.trim().slice(0, 200) || new URL(links[0].url).hostname, icon, links, defaultLinkId: links.some((link) => link.id === item.defaultLinkId) ? item.defaultLinkId : links[0].id, order: Number(item.order) || 0, lastOpenedAt: Number((item as SystemItem).lastOpenedAt) || 0, createdAt: Number(item.createdAt) || Date.now(), updatedAt: Number(item.updatedAt) || Date.now() }];
