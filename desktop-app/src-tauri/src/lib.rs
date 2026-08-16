@@ -1,17 +1,33 @@
-use tauri::Manager;
+use tauri::{Manager, RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            // 获取主窗口并设置
-            if let Some(window) = app.get_webview_window("main") {
-                // 设置用户代理为桌面浏览器，确保网页兼容性
-                let _ = window.eval("navigator.__defineGetter__('userAgent', () => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');");
+        .on_window_event(|window, event| {
+            // 点关闭按钮（红色）时：阻止退出，改为隐藏窗口，应用继续后台运行
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
             }
-            Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("启动应用失败");
+
+    app.run(|app_handle, event| {
+        // macOS：点击 Dock 图标时，若没有可见窗口则重新显示主窗口
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } = event
+        {
+            if !has_visible_windows {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        }
+    });
 }
