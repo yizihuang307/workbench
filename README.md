@@ -1,8 +1,29 @@
-# vinext-starter
+# 个人工作台
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+一个集任务管理、资料整理于一体的个人工作台应用。网页版部署于 Cloudflare Pages，并封装为桌面应用供本地使用。
+
+## 桌面版下载
+
+桌面应用由 GitHub Actions 自动构建，构建完成后自动发布到 **Releases**：
+
+[▶ 前往 Releases 下载安装包](https://github.com/yizihuang307/workbench/releases)
+
+| 平台 | 安装包 | 安装方式 |
+|------|--------|----------|
+| macOS | `.dmg` | 双击打开，把 App 拖入「应用程序」 |
+| Windows | `.exe` | 双击运行，按提示安装 |
+
+> 首次打开 macOS 应用如提示「无法验证开发者」，右键选择「打开」并确认即可（未做付费签名的正常提示）。
+
+触发自动发布的方式：
+- 推送 `v*` 版本标签（如 `v0.1.0`）自动构建并发布
+- 或到 Actions 页面手动运行「Build & Release Desktop App」
+
+## 网页版
+
+- 线上地址：https://workbench-3xq.pages.dev
+
+---
 
 ## Prerequisites
 
