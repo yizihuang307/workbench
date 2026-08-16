@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { loadWorkbenchState, saveWorkbenchState } from "@/lib/api-service";
 import { calendarDate, getRolloverDecision, isIsoDate, isTaskInPeriod, isTaskVisibleInSchedule, type TaskPeriod } from "@/lib/task-period";
 import { notifyDesktopWidgetRefresh } from "./desktop-widget";
-import { clearScheduleCache, readScheduleCache, writeScheduleCache } from "@/lib/workbench-cache";
+import { clearScheduleCache, clearWorkbenchStateCache, readScheduleCache, readWorkbenchStateCache, writeScheduleCache, writeWorkbenchStateCache } from "@/lib/workbench-cache";
 import { CalendarDays, Check, ChevronDown } from "lucide-react";
 
 type Group = "today" | "later";
@@ -168,10 +168,19 @@ export default function Home() {
         const { data } = await createClient().auth.getSession();
         currentUserId.current = data.session?.user.id ?? null;
         if (currentUserId.current) {
-          const cached = readScheduleCache<Store>(currentUserId.current);
-          if (cached) {
-            setStore(normalizeStore(cached));
+          // 优先恢复完整工作台快照缓存（覆盖今日事、随手记、传送门、资料库）。
+          const cachedState = readWorkbenchStateCache<{ schedule: Store; records: RecordStore; information: InfoStore }>(currentUserId.current);
+          if (cachedState) {
+            if (cachedState.schedule) setStore(normalizeStore(cachedState.schedule));
+            setRecordStore(cachedState.records);
+            setInfoStore(cachedState.information);
             setReady(true);
+          } else {
+            const cached = readScheduleCache<Store>(currentUserId.current);
+            if (cached) {
+              setStore(normalizeStore(cached));
+              setReady(true);
+            }
           }
         }
       } catch {
@@ -183,7 +192,10 @@ export default function Home() {
         setStore(normalizeStore(cloud.schedule));
         setRecordStore(cloud.records);
         setInfoStore(cloud.information);
-        if (currentUserId.current) writeScheduleCache(currentUserId.current, cloud.schedule);
+        if (currentUserId.current) {
+          writeWorkbenchStateCache(currentUserId.current, cloud);
+          writeScheduleCache(currentUserId.current, cloud.schedule);
+        }
         cloudLoaded.current = true;
       } catch (error) {
         setRecordStorageError(true);
@@ -263,7 +275,10 @@ export default function Home() {
         .then(() => saveWorkbenchState(snapshot))
         .then(() => {
           saveInFlight.current = false;
-          if (currentUserId.current) writeScheduleCache(currentUserId.current, snapshot.schedule);
+          if (currentUserId.current) {
+            writeWorkbenchStateCache(currentUserId.current, snapshot);
+            writeScheduleCache(currentUserId.current, snapshot.schedule);
+          }
           setRecordStorageError(false);
           setInfoStorageError(false);
           void notifyDesktopWidgetRefresh();
@@ -453,7 +468,10 @@ export default function Home() {
   const actions = { addTask, toggleTask, triggerCelebration, togglePriority, editTask, setExpectedCompletionDate, moveTask, deleteTask, dragged, setDragged, hideDone: store.hideDone, setHideDone: (hideDone: boolean) => setStore((current) => ({ ...current, hideDone })) };
 
   async function handleLogout() {
-    if (currentUserId.current) clearScheduleCache(currentUserId.current);
+    if (currentUserId.current) {
+      clearScheduleCache(currentUserId.current);
+      clearWorkbenchStateCache(currentUserId.current);
+    }
     await createClient().auth.signOut();
     window.location.href = "/login";
   }
