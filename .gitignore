@@ -49,3 +49,8 @@ tsconfig.tsbuildinfo
 /desktop-widget/windows/bin/
 /desktop-widget/windows/obj/
 /desktop-widget/windows/publish/
+
+# Tauri 桌面应用构建产物
+/个人工作台.app/
+/desktop-app/app-icon.jpg
+/desktop-app/.sites-runtime/
