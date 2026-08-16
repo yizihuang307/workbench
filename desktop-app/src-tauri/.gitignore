@@ -1,0 +1,6 @@
+# Rust 编译产物
+/target/
+/gen/schemas/
+
+# 前端构建产物（本应用直接用外部网页，dist 只是占位）
+# 注意：保留 dist/index.html，因为它是 frontendDist 的占位
